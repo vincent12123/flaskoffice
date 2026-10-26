@@ -47,22 +47,22 @@ Semua tiket ada di `public/js/level.js`: teks tugas untuk siswa, `kasus` (permin
 
 ## Deploy
 
-Produksi: **https://threejs.sukardi.cloud** di shared hosting Hostinger (`ssh -p 65002 u715621294@88.223.90.200`),
+Produksi: **https://flaskoffice.sukardi.cloud** di shared hosting Hostinger (`ssh -p 65002 u715621294@88.223.90.200`),
 dijalankan LiteSpeed lewat direktif Passenger di `public_html/.htaccess` (tanpa hPanel, tanpa systemd).
 
 | Apa | Di mana |
 |---|---|
-| Kode (clone repo ini) | `~/domains/threejs.sukardi.cloud/nodejs` |
+| Kode (clone repo ini) | `~/domains/flaskoffice.sukardi.cloud/nodejs` |
 | `.env` | `nodejs/.env` — `NODE_ENV=production`, `DB_PATH`, `COOKIE_SECURE=true`, `TRUST_PROXY=true` (port diatur LiteSpeed) |
-| Database | `~/flaskoffice-data/flaskoffice.db` (di luar folder kode) |
+| Database | `~/flaskoffice-data/flaskoffice.db` (di luar folder kode); cadangan manual di `~/flaskoffice-backup/` |
 | Log | `nodejs/tmp/console.log` |
 | Node | `/opt/alt/alt-nodejs22/root/usr/bin/node` |
 
-Update (**backup `~/flaskoffice-data` dulu**):
+Update (**backup dulu**: `sqlite3 ~/flaskoffice-data/flaskoffice.db ".backup ~/flaskoffice-backup/flaskoffice-$(date +%F).db"`):
 
 ```bash
 export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
-cd ~/domains/threejs.sukardi.cloud/nodejs
+cd ~/domains/flaskoffice.sukardi.cloud/nodejs
 git pull && npm ci && npm run build && touch tmp/restart.txt
 ```
 
