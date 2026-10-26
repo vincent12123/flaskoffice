@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Flask Office — Kirim Tugas</title>
+<link rel="stylesheet" href="/css/gaya.css">
+<link rel="stylesheet" href="/css/siswa.css">
+<style>
+  .langkah { display: none; }
+  .langkah.tampil { display: flex; flex-direction: column; gap: 18px; }
+</style>
+</head>
+<body class="siswa">
+<main>
+  <header class="kepala">
+    <div class="logo" aria-hidden="true">
+      <!-- labu kimia (Flask) -->
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg>
+    </div>
+    <div>
+      <h1>Flask Office</h1>
+      <p>Kirim proyek Flask kamu, lalu lihat pemeriksaannya di layar proyektor.</p>
+    </div>
+  </header>
+
+  <ol class="langkah-langkah" aria-label="Langkah">
+    <li id="penanda-1" class="aktif" aria-current="step">Masuk</li>
+    <li id="penanda-2">Kirim<span class="opsional"> proyek</span></li>
+    <li id="penanda-3"><span class="opsional">Lihat </span>Hasil</li>
+  </ol>
+
+  <!-- Langkah 1: masuk ke sesi -->
+  <section class="langkah tampil" id="langkah-masuk">
+    <form class="kartu" id="form-masuk" novalidate>
+      <h2 class="judul-kartu">
+        <svg class="ikon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>
+        Masuk ke sesi kelas
+      </h2>
+      <p class="kecil redup" style="margin:0">Kode sesi tampil di layar proyektor guru.</p>
+      <label for="kode">Kode sesi</label>
+      <input type="text" id="kode" class="mono input-kode" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="Lihat di layar proyektor, mis. K7QX2M">
+      <div class="baris-isian">
+        <div><label for="nama">Nama lengkap</label><input type="text" id="nama" autocomplete="name" maxlength="60" placeholder="Nama sesuai absen"></div>
+        <div><label for="kelas">Kelas</label><input type="text" id="kelas" placeholder="XI RPL 1" maxlength="20"></div>
+      </div>
+      <div style="margin-top:18px"><button class="utama penuh" type="submit">Masuk</button></div>
+      <p class="pesan-galat" id="galat-masuk" role="alert"></p>
+    </form>
+  </section>
+
+  <!-- Langkah 2: tiket + unggah -->
+  <section class="langkah" id="langkah-kirim">
+    <article class="kartu tugas">
+      <span class="info-sesi" id="info-sesi"></span>
+      <h2 id="judul-tiket"></h2>
+      <div id="isi-tiket"></div>
+      <p class="kecil redup" id="konsep-tiket"></p>
+      <h3 class="subjudul">Yang akan diperiksa</h3>
+      <ul id="daftar-periksa" class="daftar-cek"></ul>
+      <details id="kotak-petunjuk"><summary>Petunjuk</summary><div id="petunjuk-tiket" style="margin-top:8px"></div></details>
+    </article>
+
+    <div class="kartu">
+      <h2 class="judul-kartu">
+        <svg class="ikon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+        Kirim proyek
+      </h2>
+      <div class="zona" id="zona" style="margin-top:12px">
+        <div class="ikon-unggah" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 13v8"/><path d="m8 17 4-4 4 4"/><path d="M20.4 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.3"/></svg>
+        </div>
+        <p class="judul-zona">Seret folder proyek atau berkas .zip ke sini</p>
+        <p class="kecil redup" style="margin:0">atau pilih dari komputermu</p>
+        <div class="aksi">
+          <button type="button" id="pilih-folder">Pilih folder proyek</button>
+          <button type="button" id="pilih-zip">Pilih berkas .zip</button>
+        </div>
+        <p class="kecil redup" style="margin:14px 0 0">Folder <code>venv</code>, <code>__pycache__</code>, <code>instance</code>, dan berkas <code>.env</code> otomatis tidak ikut. Yang dikirim: berkas <code>.py</code>, <code>templates/</code>, dan <code>static/</code>.</p>
+        <input type="file" id="input-folder" webkitdirectory multiple hidden>
+        <input type="file" id="input-zip" accept=".zip" hidden>
+      </div>
+      <div id="pratinjau" hidden>
+        <div class="ringkas-berkas">
+          <b id="jumlah-berkas">Berkas yang akan dikirim</b>
+          <div class="aksi">
+            <button type="button" id="batal">Batal</button>
+            <button class="utama" type="button" id="kirim">Kirim ke guru</button>
+          </div>
+        </div>
+        <ul class="daftar-berkas mono" id="daftar-berkas"></ul>
+      </div>
+      <p class="pesan-galat" id="galat-kirim" role="alert"></p>
+    </div>
+
+    <div class="kartu" id="kartu-status" hidden aria-live="polite">
+      <div class="status menunggu" id="kotak-status">
+        <div class="tanda" id="tanda-status" aria-hidden="true">⏳</div>
+        <p class="status-besar" id="status-teks"></p>
+      </div>
+      <div id="hasil"></div>
+    </div>
+
+    <div class="kaki"><p>Masuk sebagai <b id="saya"></b> · <a href="#" id="ganti">ganti sesi/nama</a></p></div>
+  </section>
+</main>
+<script type="module" src="/js/siswa.js"></script>
+</body>
+</html>

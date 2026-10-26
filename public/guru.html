@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flask Office — Guru</title>
+<link rel="stylesheet" href="/css/gaya.css">
+<style>
+  body { font-size: 17px; }
+  .layar { display: none; }
+  .layar.tampil { display: block; }
+  .tengah { max-width: 420px; margin: 8vh auto; padding: 0 16px; }
+  .wadah { max-width: 1000px; margin: 0 auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .bar-atas { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+  .bar-atas h1 { margin: 0; font-size: 22px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--garis); }
+  th { font-size: 14px; color: var(--redup); font-weight: 600; }
+  .tab-sesi { display: flex; gap: 4px; }
+  .tab-sesi button[aria-selected="true"] { background: var(--aksen); color: #fff; border-color: var(--aksen); }
+  .tab-sesi .jml { font-size: 13px; opacity: .8; }
+  td .aksi { flex-wrap: nowrap; }
+  td .aksi button { padding: 5px 10px; font-size: 14px; white-space: nowrap; }
+  .form-baris { display: grid; grid-template-columns: 2fr 1fr auto; gap: 10px; align-items: end; }
+  @media (max-width: 700px) { .form-baris { grid-template-columns: 1fr; } }
+
+  /* Tampilan proyektor */
+  #layar-sesi { padding: 12px 16px; }
+  .proyektor { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 14px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 960px) { .proyektor { grid-template-columns: 1fr; } }
+  .kolom { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  svg#kantor { width: 100%; height: auto; display: block; border-radius: 12px; border: 1px solid var(--garis); }
+
+  /* Kantor 3D (kantor3d.js): kanvas WebGL + lapisan HTML untuk teks */
+  .kantor3d { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; border: 1px solid var(--garis); overflow: hidden; background: #efe6d2; }
+  .kantor3d canvas { display: block; width: 100%; height: 100%; }
+  .kantor3d .lapisan { position: absolute; inset: 0; pointer-events: none; overflow: hidden; font-family: ui-monospace, Consolas, monospace; line-height: 1.3; }
+  .lapisan > * { position: absolute; left: 0; top: 0; translate: -50% -100%; white-space: pre; }
+  .lapisan .nama { padding: .15em .7em; border-radius: .45em; color: #fff; font-weight: 700; opacity: .9; }
+  .lapisan .ikon { translate: -20% -100%; }
+  .lapisan .ikon svg { display: block; width: 4.4em; height: 4.4em; overflow: visible; }
+  .lapisan .gelembung { background: #fff; color: #1d1d1d; border: .17em solid #2b2f3a; border-radius: .75em; padding: .45em .85em; }
+  .lapisan .gelembung::after { content: ''; position: absolute; left: 50%; bottom: -.62em; width: .9em; height: .9em; background: inherit; border: inherit; border-width: 0 .17em .17em 0; border-style: solid; transform: translateX(-50%) rotate(45deg); }
+  .lapisan .gelembung.tetap { background: #f2f6ff; color: #2a4d8f; border: .17em dashed #4f8cff; }
+  .lapisan .gelembung.tetap::after { display: none; }
+  .lapisan .gelembung:empty { display: none; }
+  .lapisan .emote { font-size: 1.7em; width: 1.6em; height: 1.6em; display: grid; place-items: center; background: rgba(255,255,255,.9); border-radius: 50%; animation: fo-naik 1.8s forwards; }
+  .lapisan .tok { font-size: 1.3em; font-weight: 700; color: #6b5a45; animation: fo-naik 1s forwards; }
+  .lapisan .cincin { width: 4em; height: 4em; translate: -50% -50%; border: .3em solid #8a6f52; border-radius: 50%; animation: fo-cincin .5s forwards; }
+  .lapisan .skor { font-size: 2em; font-weight: 700; color: #1f8a52; animation: fo-naik 2s forwards; }
+  .lapisan .atribusi { left: auto; top: auto; right: .6em; bottom: .4em; translate: none; font-size: .85em; color: rgba(60,50,40,.55); }
+  .lapisan .kilat { inset: 0; translate: none; background: #fff; animation: fo-kilat .4s forwards; }
+  .lapisan .bintang { width: 0; height: 0; translate: none; animation: fo-putar 1.8s linear 2, fo-pudar 3.6s forwards; }
+  .lapisan .bintang span { position: absolute; color: #ffd700; font-size: 1.4em; translate: -50% -50%; transform: rotate(var(--sudut)) translateY(-2.6em); }
+  @keyframes fo-naik { 0% { transform: translateY(0); opacity: 0; } 15%, 75% { opacity: 1; } 100% { transform: translateY(-1.8em); opacity: 0; } }
+  @keyframes fo-cincin { from { transform: scale(.15); opacity: .8; } to { transform: scale(1); opacity: 0; } }
+  @keyframes fo-kilat { 0%, 100% { opacity: 0; } 40% { opacity: .35; } }
+  @keyframes fo-putar { to { rotate: 360deg; } }
+  @keyframes fo-pudar { 0%, 100% { opacity: 0; } 10%, 85% { opacity: 1; } }
+  .kode-sesi { display: flex; gap: 14px; align-items: center; }
+  .kode-sesi img { width: 128px; height: 128px; background: #fff; border-radius: 8px; border: 1px solid var(--garis); }
+  .kode-besar { font: 700 44px/1 ui-monospace, Consolas, monospace; letter-spacing: 4px; }
+  .antrean { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+  .antrean button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+  .antrean button[aria-current="true"] { border-color: var(--aksen); box-shadow: 0 0 0 2px color-mix(in srgb, var(--aksen) 35%, transparent); }
+  .antrean .nama { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hasil li { font-size: 18px; }
+  .sedang { font-size: 22px; font-weight: 700; margin: 0; }
+  .tab-berkas { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .tab-berkas button { font: 14px ui-monospace, Consolas, monospace; padding: 5px 10px; }
+  .tab-berkas button[aria-selected="true"] { background: var(--aksen); color: #fff; border-color: var(--aksen); }
+  #isi-berkas { max-height: 50vh; margin: 0; font-size: 15px; white-space: pre; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<section class="layar" id="layar-login">
+  <div class="tengah">
+    <h1 style="margin:0 0 12px">Flask Office · Guru</h1>
+    <form class="kartu" id="form-login">
+      <label for="username">Username</label>
+      <input type="text" id="username" autocomplete="username" autocapitalize="none">
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password">
+      <div class="aksi" style="margin-top:14px"><button class="utama" type="submit">Masuk</button></div>
+      <p class="pesan-galat" id="galat-login" role="alert"></p>
+    </form>
+  </div>
+</section>
+
+<!-- Daftar sesi -->
+<section class="layar" id="layar-daftar">
+  <div class="wadah">
+    <div class="bar-atas">
+      <h1>Sesi kelas</h1>
+      <span class="aksi"><span class="redup" id="nama-guru"></span><button type="button" id="keluar">Keluar</button></span>
+    </div>
+    <form class="kartu" id="form-sesi">
+      <h2 style="margin:0 0 4px;font-size:18px">Buka sesi baru</h2>
+      <div class="form-baris">
+        <div>
+          <label for="pilih-mode">Jenis pemeriksaan</label>
+          <select id="pilih-mode">
+            <option value="bebas">Proyek bebas — cek bug, template, keamanan (app Flask apa pun)</option>
+            <option value="tiket">Tiket — cek sesuai tugas tertentu</option>
+            <option value="pos">Proyek POS (SMK Mart) — cek per bab tutorial dengan test resmi</option>
+          </select>
+          <div id="wadah-level" hidden>
+            <label for="pilih-level" id="label-level">Tiket yang diperiksa</label><select id="pilih-level"></select>
+          </div>
+        </div>
+        <div><label for="label-sesi">Kelas / keterangan</label><input type="text" id="label-sesi" placeholder="XI RPL 1" maxlength="40"></div>
+        <button class="utama" type="submit">Buka sesi</button>
+      </div>
+      <p class="pesan-galat" id="galat-sesi" role="alert"></p>
+    </form>
+    <div class="kartu">
+      <div class="bar-atas" style="margin-bottom:10px">
+        <div class="tab-sesi" role="tablist" aria-label="Saring sesi">
+          <button type="button" role="tab" data-saring="aktif">Aktif <span class="jml" id="jml-aktif"></span></button>
+          <button type="button" role="tab" data-saring="ditutup">Ditutup <span class="jml" id="jml-ditutup"></span></button>
+        </div>
+        <button type="button" id="hapus-ditutup" hidden>Hapus semua yang ditutup</button>
+      </div>
+      <p class="kecil redup" id="info-ditutup" hidden style="margin:0 0 8px">Menghapus sesi juga menghapus semua kiriman siswa di dalamnya dan tidak bisa dibatalkan. Unduh rekap dulu bila masih diperlukan. Sesi yang sudah ditutup lebih dari 90 hari dihapus otomatis.</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Kode</th><th>Pemeriksaan</th><th>Kelas</th><th>Dibuka</th><th>Kiriman</th><th>Aksi</th></tr></thead>
+          <tbody id="tabel-sesi"></tbody>
+        </table>
+      </div>
+      <p class="pesan-galat" id="galat-daftar" role="alert"></p>
+    </div>
+  </div>
+</section>
+
+<!-- Tampilan proyektor -->
+<section class="layar" id="layar-sesi">
+  <div class="proyektor">
+    <div class="kolom">
+      <div id="wadah-kantor">
+        <svg id="kantor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kantor pixel yang memeriksa kiriman"></svg>
+      </div>
+      <div class="kartu" aria-live="polite">
+        <p class="sedang" id="sedang">Pilih kiriman dari antrean untuk diperiksa.</p>
+        <div id="hasil" style="margin-top:10px"></div>
+      </div>
+      <details class="kartu" id="kartu-kode">
+        <summary style="cursor:pointer;font-weight:600">Lihat kode kiriman</summary>
+        <div class="tab-berkas" id="tab-berkas" style="margin-top:10px"></div>
+        <pre id="isi-berkas" class="mono"></pre>
+      </details>
+    </div>
+
+    <div class="kolom">
+      <div class="kartu">
+        <div class="redup kecil" id="info-tiket"></div>
+        <div class="kode-sesi" style="margin-top:8px">
+          <img id="qr" alt="QR code untuk membuka halaman kirim tugas">
+          <div>
+            <div class="redup kecil">Buka <b id="alamat"></b>, masukkan kode:</div>
+            <div class="kode-besar" id="kode-besar"></div>
+            <div class="kecil redup" id="status-sesi"></div>
+          </div>
+        </div>
+      </div>
+      <div class="kartu">
+        <div class="bar-atas" style="margin-bottom:8px">
+          <b>Antrean <span id="hitung" class="redup"></span></b>
+          <button class="utama" type="button" id="berikutnya">Periksa berikutnya ▶</button>
+        </div>
+        <ul class="antrean" id="antrean"></ul>
+      </div>
+      <div class="kartu aksi">
+        <button type="button" id="kembali">← Daftar sesi</button>
+        <button type="button" id="unduh-rekap">Unduh rekap (CSV)</button>
+        <button type="button" id="tutup-sesi">Tutup sesi</button>
+        <button type="button" id="ganti-kantor" title="Beralih antara kantor 3D dan kantor pixel 2D">Kantor 2D</button>
+      </div>
+      <p class="kecil redup" id="status-py">Menyiapkan Python…</p>
+    </div>
+  </div>
+</section>
+
+<!-- Add-on three.js (LDrawLoader) mengimpor 'three'; arahkan ke salinan lokal yang sama dengan kantor3d.js -->
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.js" } }</script>
+<script type="module" src="/js/guru.js"></script>
+</body>
+</html>

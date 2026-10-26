@@ -1,0 +1,36 @@
+{
+  "name": "flaskoffice",
+  "version": "0.1.0",
+  "description": "Flask Office — siswa mengunggah proyek Flask dari VS Code, guru memeriksanya di proyektor lewat kantor pixel-art. Pemeriksaan berjalan di browser guru (Pyodide), server hanya menyimpan kiriman. Node.js + Hono + SQLite.",
+  "scripts": {
+    "dev": "node --watch --import tsx src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "tsx src/db/migrasi.ts",
+    "guru:buat": "tsx src/cli/buat-guru.ts"
+  },
+  "license": "UNLICENSED",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "better-sqlite3": "^13.0.3",
+    "fflate": "^0.8.3",
+    "hono": "^4.13.13",
+    "qrcode": "^1.5.4",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.20.5",
+    "@types/qrcode": "^1.5.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}

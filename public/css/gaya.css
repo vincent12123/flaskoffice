@@ -1,0 +1,52 @@
+/* Tema terang: lebih terbaca di proyektor kelas */
+:root {
+  --bg: #f3f1ec; --panel: #ffffff; --garis: #d9d4c7; --teks: #1f2430; --redup: #636b7d;
+  --aksen: #2f6fe4; --aksen-teks: #ffffff; --hijau: #1f8a52; --hijau-latar: #e6f5ec;
+  --merah: #c63d3d; --merah-latar: #fbeaea; --kuning: #b8860b; --kode: #f5f3ee;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--teks); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+h1, h2, h3 { line-height: 1.25; }
+a { color: var(--aksen); }
+code, pre, textarea, .mono { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; }
+code { background: var(--kode); border: 1px solid var(--garis); padding: 0 5px; border-radius: 4px; font-size: .92em; }
+pre { background: var(--kode); border: 1px solid var(--garis); padding: 10px 12px; border-radius: 8px; overflow-x: auto; font-size: 14px; }
+.kartu { background: var(--panel); border: 1px solid var(--garis); border-radius: 12px; padding: 16px; }
+.redup { color: var(--redup); }
+.kecil { font-size: 14px; }
+label { display: block; font-weight: 600; margin: 10px 0 4px; }
+input[type=text], input[type=password], select {
+  width: 100%; font: inherit; padding: 9px 11px; border: 1px solid var(--garis); border-radius: 8px; background: #fff; color: var(--teks);
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--aksen) 45%, transparent); outline-offset: 1px; }
+button { font: inherit; cursor: pointer; border-radius: 8px; padding: 9px 16px; border: 1px solid var(--garis); background: var(--panel); color: var(--teks); }
+button.utama { background: var(--aksen); color: var(--aksen-teks); border-color: var(--aksen); font-weight: 600; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+button.bahaya { background: var(--merah); color: #fff; border-color: var(--merah); font-weight: 600; }
+.aksi { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pesan-galat { color: var(--merah); background: var(--merah-latar); border-radius: 8px; padding: 8px 12px; margin: 10px 0 0; }
+.pesan-galat:empty { display: none; }
+.hasil { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hasil li { padding: 10px 12px; border-radius: 8px; background: var(--kode); border-left: 5px solid var(--garis); }
+.hasil li.lulus { border-left-color: var(--hijau); background: var(--hijau-latar); }
+.hasil li.gagal { border-left-color: var(--merah); background: var(--merah-latar); }
+.hasil li.saran { border-left-color: #d9a300; background: #fff7dc; }
+.hasil li.peringatan { border-left-color: #d98c00; background: #fff4e0; }
+.hasil li.info { border-left-color: #3b7bd6; background: #eef4fd; }
+.ringkas-laporan { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.skor { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 84px; height: 84px; border-radius: 50%; border: 5px solid var(--garis); }
+.skor .angka { font-size: 30px; font-weight: 800; line-height: 1; }
+.skor.lulus { border-color: var(--hijau); color: var(--hijau); }
+.skor.gagal { border-color: var(--merah); color: var(--merah); }
+.chip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 15px; background: var(--kode); }
+.chip.bug { background: var(--merah-latar); color: var(--merah); }
+.chip.peringatan { background: #fff4e0; color: #9a5b00; }
+.chip.saran { background: #eef4fd; color: #2a5aa8; }
+.kelompok { margin-top: 10px; }
+.kelompok > summary { cursor: pointer; font-weight: 700; margin-bottom: 8px; }
+.lencana { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--kode); border: 1px solid var(--garis); }
+.lencana.lulus { background: var(--hijau-latar); color: var(--hijau); border-color: transparent; }
+.lencana.gagal { background: var(--merah-latar); color: var(--merah); border-color: transparent; }
+.lencana.menunggu { background: #fff5d6; color: #8a6400; border-color: transparent; }
+.tugas ul { padding-left: 20px; margin: 6px 0; }
+.tugas li { margin: 4px 0; }

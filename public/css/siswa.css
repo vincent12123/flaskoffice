@@ -1,0 +1,136 @@
+/* =====================================================================
+   Halaman siswa (index.html). Dimuat SETELAH gaya.css; hanya dipakai halaman ini,
+   jadi tampilan guru/proyektor tidak berubah. Siswa sering membuka dari HP,
+   karena itu ada mode gelap mengikuti pengaturan perangkat.
+   ===================================================================== */
+:root {
+  --bg: #f4f5fb; --panel: #ffffff; --garis: #e2e4ef; --teks: #1b1e2b; --redup: #5f667a;
+  --aksen: #4f46e5; --aksen-2: #0ea5e9; --aksen-lembut: #eef0ff; --kode: #f6f7fb;
+  --hijau: #15803d; --hijau-latar: #e8f7ee; --merah: #c2410c; --merah-latar: #fdeee6;
+  --bayang: 0 1px 2px rgba(17, 24, 39, .05), 0 8px 24px -12px rgba(30, 41, 99, .18);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1220; --panel: #171b2e; --garis: #2a3050; --teks: #e7e9f5; --redup: #9aa1bd;
+    --aksen: #8b85ff; --aksen-2: #38bdf8; --aksen-lembut: #222850; --kode: #1d2238;
+    --hijau: #4ade80; --hijau-latar: #12301f; --merah: #fb923c; --merah-latar: #3a2015;
+    --bayang: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px -14px rgba(0, 0, 0, .7);
+  }
+  input[type=text] { background: var(--kode); color: var(--teks); }
+  .hasil li.saran { background: #3a3110; }
+  .hasil li.peringatan { background: #3a2a10; }
+  .hasil li.info { background: #172744; }
+}
+
+body.siswa { background: var(--bg); min-height: 100vh; }
+body.siswa::before {           /* pita gradasi di atas halaman */
+  content: ''; position: fixed; inset: 0 0 auto; height: 260px; z-index: -1;
+  background: radial-gradient(1200px 260px at 20% -40%, color-mix(in srgb, var(--aksen) 55%, transparent), transparent),
+              radial-gradient(900px 240px at 90% -60%, color-mix(in srgb, var(--aksen-2) 45%, transparent), transparent);
+}
+
+.siswa main { max-width: 720px; margin: 0 auto; padding: 28px 16px 48px; display: flex; flex-direction: column; gap: 18px; }
+
+/* ---------- Kepala ---------- */
+.kepala { display: flex; align-items: center; gap: 14px; }
+.logo {
+  flex: none; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, var(--aksen), var(--aksen-2)); box-shadow: 0 10px 24px -10px var(--aksen);
+}
+.kepala h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+.kepala p { margin: 2px 0 0; color: var(--redup); }
+
+/* ---------- Penunjuk langkah ---------- */
+.langkah-langkah { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; list-style: none; margin: 0; padding: 0; counter-reset: l; }
+.langkah-langkah li {
+  counter-increment: l; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 75%, transparent); border: 1px solid var(--garis); color: var(--redup); font-size: 14px; font-weight: 600;
+}
+.langkah-langkah li::before {
+  content: counter(l); flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; background: var(--kode); border: 1px solid var(--garis);
+}
+.langkah-langkah li.aktif { color: var(--teks); border-color: color-mix(in srgb, var(--aksen) 55%, var(--garis)); background: var(--panel); box-shadow: var(--bayang); }
+.langkah-langkah li.aktif::before { background: var(--aksen); color: #fff; border-color: var(--aksen); }
+.langkah-langkah li.selesai::before { content: '✓'; background: var(--hijau-latar); color: var(--hijau); border-color: transparent; }
+@media (max-width: 420px) {
+  .langkah-langkah li { font-size: 13px; padding: 7px 8px; gap: 6px; }
+  .langkah-langkah .opsional { display: none; }   /* "Kirim proyek" → "Kirim" di layar sempit */
+}
+
+/* ---------- Kartu ---------- */
+.siswa .kartu { border-radius: 18px; padding: 20px; border-color: var(--garis); box-shadow: var(--bayang); }
+.judul-kartu { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 18px; }
+.judul-kartu .ikon { color: var(--aksen); }
+.siswa label { font-size: 14px; color: var(--redup); }
+.siswa input[type=text] {
+  border-radius: 12px; padding: 12px 14px; border-color: var(--garis); transition: border-color .15s, box-shadow .15s;
+}
+.siswa input[type=text]:focus { border-color: var(--aksen); box-shadow: 0 0 0 4px color-mix(in srgb, var(--aksen) 18%, transparent); outline: none; }
+.input-kode { font-size: 26px !important; letter-spacing: .32em; text-transform: uppercase; text-align: center; font-weight: 700; padding: 14px !important; }
+.input-kode::placeholder { letter-spacing: normal; font-size: 15px; font-weight: 400; text-transform: none; }
+.siswa .baris-isian { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .siswa .baris-isian { grid-template-columns: 1fr; } }
+.siswa button { border-radius: 12px; padding: 11px 18px; font-weight: 600; transition: transform .08s, filter .15s, background .15s; }
+.siswa button:active:not(:disabled) { transform: translateY(1px); }
+.siswa button.utama { background: linear-gradient(135deg, var(--aksen), color-mix(in srgb, var(--aksen) 70%, var(--aksen-2))); border: 0; box-shadow: 0 8px 18px -10px var(--aksen); }
+.siswa button.utama:hover:not(:disabled) { filter: brightness(1.07); }
+.siswa button.penuh { width: 100%; padding: 13px; font-size: 16px; }
+.siswa button:not(.utama) { background: var(--panel); }
+.siswa button:not(.utama):hover:not(:disabled) { background: var(--aksen-lembut); }
+
+/* ---------- Tugas ---------- */
+.info-sesi { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--aksen); background: var(--aksen-lembut); padding: 4px 10px; border-radius: 999px; }
+.info-sesi::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--hijau); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hijau) 25%, transparent); }
+.tugas h2 { font-size: 22px; letter-spacing: -.01em; margin: 10px 0 8px; }
+.tugas a { font-weight: 600; }
+.subjudul { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--redup); margin: 16px 0 8px; }
+.daftar-cek { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.daftar-cek li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--kode); font-size: 14.5px; }
+.daftar-cek li::before { content: '✓'; flex: none; width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--aksen); background: var(--aksen-lembut); margin-top: 1px; }
+.siswa details#kotak-petunjuk { margin-top: 12px; border: 1px solid var(--garis); border-radius: 12px; padding: 10px 14px; }
+.siswa details#kotak-petunjuk[open] { background: var(--kode); }
+.siswa details summary { cursor: pointer; font-weight: 600; }
+
+/* ---------- Zona unggah ---------- */
+.siswa .zona {
+  border: 2px dashed color-mix(in srgb, var(--aksen) 35%, var(--garis)); border-radius: 16px; padding: 28px 16px; text-align: center;
+  background: linear-gradient(180deg, var(--aksen-lembut), transparent); transition: border-color .15s, background .15s, transform .15s;
+}
+.siswa .zona.aktif { border-color: var(--aksen); background: var(--aksen-lembut); transform: scale(1.01); }
+.zona .ikon-unggah { width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 16px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--aksen), var(--aksen-2)); }
+.zona .judul-zona { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
+.zona .aksi { justify-content: center; margin-top: 14px; }
+
+.ringkas-berkas { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.ringkas-berkas b { font-size: 16px; }
+.siswa .daftar-berkas { list-style: none; margin: 10px 0 0; padding: 8px; max-height: 220px; overflow: auto; border: 1px solid var(--garis); border-radius: 12px; background: var(--kode); font-size: 13px; }
+.siswa .daftar-berkas li { padding: 3px 6px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.siswa .daftar-berkas li:nth-child(odd) { background: color-mix(in srgb, var(--panel) 60%, transparent); }
+
+/* ---------- Status & hasil ---------- */
+.status { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 14px; margin-bottom: 14px; background: var(--kode); }
+.status .tanda { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 800; }
+.status.menunggu .tanda { background: var(--aksen-lembut); color: var(--aksen); position: relative; }
+.status.menunggu .tanda::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--aksen); border-top-color: transparent; animation: putar 1s linear infinite; }
+.status.lulus { background: var(--hijau-latar); }
+.status.lulus .tanda { background: var(--hijau); color: #fff; }
+.status.gagal { background: var(--merah-latar); }
+.status.gagal .tanda { background: var(--merah); color: #fff; }
+.siswa .status-besar { font-size: 16.5px; font-weight: 650; margin: 0; }
+@keyframes putar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .status.menunggu .tanda::after { animation: none; } .siswa .zona.aktif { transform: none; } }
+
+.siswa .hasil li { border-radius: 10px; }
+
+/* ---------- Kaki ---------- */
+.kaki { display: flex; justify-content: center; }
+.kaki p { margin: 0; font-size: 14px; color: var(--redup); background: var(--panel); border: 1px solid var(--garis); padding: 6px 14px; border-radius: 999px; }
+
+/* ---------- Animasi masuk ---------- */
+.siswa .langkah.tampil > * { animation: muncul .35s ease both; }
+.siswa .langkah.tampil > *:nth-child(2) { animation-delay: .05s; }
+.siswa .langkah.tampil > *:nth-child(3) { animation-delay: .1s; }
+/* hanya geser (tanpa opacity): bila animasi tidak berjalan (tab di latar), isi tetap terlihat */
+@keyframes muncul { from { transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .siswa .langkah.tampil > * { animation: none; } }
