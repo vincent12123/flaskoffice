@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uji Kantor 3D</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/css/gaya.css">
+<!--
+  KHUSUS PENGEMBANGAN — tidak ditautkan dari halaman mana pun.
+  Memainkan adegan kantor 3D dengan antrean palsu, tanpa login dan tanpa kiriman sungguhan.
+-->
+<style>
+  body { font-size: 16px; }
+  .wadah { max-width: 1280px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .tombol { display: flex; flex-wrap: wrap; gap: 8px; }
+  #status { font: 14px ui-monospace, Consolas, monospace; color: var(--redup); }
+  /* Kantor 3D (kantor3d.js): kanvas WebGL + lapisan HTML untuk teks */
+  .kantor3d { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; border: 1px solid var(--garis); overflow: hidden; background: #efe6d2; }
+  .kantor3d canvas { display: block; width: 100%; height: 100%; }
+  .kantor3d .lapisan { position: absolute; inset: 0; pointer-events: none; overflow: hidden; font-family: ui-monospace, Consolas, monospace; line-height: 1.3; }
+  .lapisan > * { position: absolute; left: 0; top: 0; translate: -50% -100%; white-space: pre; }
+  .lapisan .nama { padding: .15em .7em; border-radius: .45em; color: #fff; font-weight: 700; opacity: .9; }
+  .lapisan .ikon { translate: -20% -100%; }
+  .lapisan .ikon svg { display: block; width: 4.4em; height: 4.4em; overflow: visible; }
+  .lapisan .gelembung { background: #fff; color: #1d1d1d; border: .17em solid #2b2f3a; border-radius: .75em; padding: .45em .85em; }
+  .lapisan .gelembung::after { content: ''; position: absolute; left: 50%; bottom: -.62em; width: .9em; height: .9em; background: inherit; border: inherit; border-width: 0 .17em .17em 0; border-style: solid; transform: translateX(-50%) rotate(45deg); }
+  .lapisan .gelembung.tetap { background: #f2f6ff; color: #2a4d8f; border: .17em dashed #4f8cff; }
+  .lapisan .gelembung.tetap::after { display: none; }
+  .lapisan .gelembung:empty { display: none; }
+  .lapisan .emote { font-size: 1.7em; width: 1.6em; height: 1.6em; display: grid; place-items: center; background: rgba(255,255,255,.9); border-radius: 50%; animation: fo-naik 1.8s forwards; }
+  .lapisan .tok { font-size: 1.3em; font-weight: 700; color: #6b5a45; animation: fo-naik 1s forwards; }
+  .lapisan .cincin { width: 4em; height: 4em; translate: -50% -50%; border: .3em solid #8a6f52; border-radius: 50%; animation: fo-cincin .5s forwards; }
+  .lapisan .skor { font-size: 2em; font-weight: 700; color: #1f8a52; animation: fo-naik 2s forwards; }
+  .lapisan .atribusi { left: auto; top: auto; right: .6em; bottom: .4em; translate: none; font-size: .85em; color: rgba(60,50,40,.55); }
+  .lapisan .kilat { inset: 0; translate: none; background: #fff; animation: fo-kilat .4s forwards; }
+  .lapisan .bintang { width: 0; height: 0; translate: none; animation: fo-putar 1.8s linear 2, fo-pudar 3.6s forwards; }
+  .lapisan .bintang span { position: absolute; color: #ffd700; font-size: 1.4em; translate: -50% -50%; transform: rotate(var(--sudut)) translateY(-2.6em); }
+  @keyframes fo-naik { 0% { transform: translateY(0); opacity: 0; } 15%, 75% { opacity: 1; } 100% { transform: translateY(-1.8em); opacity: 0; } }
+  @keyframes fo-cincin { from { transform: scale(.15); opacity: .8; } to { transform: scale(1); opacity: 0; } }
+  @keyframes fo-kilat { 0%, 100% { opacity: 0; } 40% { opacity: .35; } }
+  @keyframes fo-putar { to { rotate: 360deg; } }
+  @keyframes fo-pudar { 0%, 100% { opacity: 0; } 10%, 85% { opacity: 1; } }
+</style>
+</head>
+<body>
+<main class="wadah">
+  <h1 style="margin:0;font-size:20px">Uji kantor 3D</h1>
+  <div id="wadah-kantor"></div>
+  <div class="tombol">
+    <button type="button" data-aksi="tambah">Tambah antrean</button>
+    <button type="button" data-aksi="tambah4">Tambah 4</button>
+    <button type="button" data-aksi="kosongkan">Kosongkan antrean</button>
+    <button type="button" data-aksi="lulus">Panggil → lulus</button>
+    <button type="button" data-aksi="saran">Panggil → lulus + saran</button>
+    <button type="button" data-aksi="gagal">Panggil → perlu perbaikan</button>
+    <button type="button" data-aksi="waktu">Panggil → waktu habis</button>
+    <button type="button" data-aksi="error">Panggil → error</button>
+    <button type="button" data-aksi="reset">Reset</button>
+  </div>
+  <p id="status">Siap.</p>
+</main>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.js" } }</script>
+<script type="module">
+  import { buatKantor3D } from '/js/kantor3d.js';
+  const kantor = buatKantor3D(document.getElementById('wadah-kantor'));
+  window.kantor = kantor;
+  const NAMA = ['Budi Santoso', 'Siti Aminah', 'Rina Wati', 'Agus Pratama', 'Dewi Lestari', 'Fajar Nugroho', 'Lina Marlina', 'Yoga Saputra'];
+  let nomor = 0;
+  const antrean = [];
+  const status = (t) => { document.getElementById('status').textContent = t; };
+  const kirim = () => kantor.antrean(antrean);
+  let sibuk = false;
+
+  async function panggil(h) {
+    if (sibuk || !antrean.length) { status(sibuk ? 'Masih sibuk…' : 'Antrean kosong.'); return; }
+    sibuk = true;
+    const m = antrean[0];
+    status(`Memanggil ${m.nama} → ${JSON.stringify(h)}`);
+    await kantor.datang(m.nama, m.id);
+    await kantor.periksa();
+    kantor.kabar('GET /');
+    await new Promise((r) => setTimeout(r, 2500));
+    antrean.shift();              // seperti guru.js: status berubah setelah hasil disimpan
+    await kantor.hasil(h);
+    kirim();
+    sibuk = false;
+    status('Selesai.');
+  }
+
+  const AKSI = {
+    tambah: () => { antrean.push({ id: ++nomor, nama: NAMA[nomor % NAMA.length] }); kirim(); },
+    tambah4: () => { for (let i = 0; i < 4; i++) AKSI.tambah(); },
+    kosongkan: () => { antrean.length = 0; kirim(); },
+    lulus: () => panggil({ lulus: true, skor: 92, bebas: true }),
+    saran: () => panggil({ lulus: true, saran: true }),
+    gagal: () => panggil({ lulus: false, bug: 2 }),
+    waktu: () => panggil({ lulus: false, bug: 1, terhenti: 'waktu' }),
+    error: () => panggil({ lulus: false, bug: 1, terhenti: 'error' }),
+    reset: () => { kantor.reset(); kirim(); },
+  };
+  for (const b of document.querySelectorAll('[data-aksi]')) b.onclick = () => AKSI[b.dataset.aksi]();
+</script>
+</body>
+</html>

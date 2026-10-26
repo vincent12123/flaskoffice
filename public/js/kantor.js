@@ -886,7 +886,11 @@ export function buatKantor(svg) {
     mulaiIdle();
   }
 
+  // Kantor 2D tidak punya ruang tunggu; antrean cukup terlihat di daftar halaman guru.
+  // Ada supaya antarmukanya sama dengan kantor 3D (datang(nama, id) juga mengabaikan id).
+  function antrean() {}
+
   papan([]);
   mulaiIdle();
-  return { datang, periksa, kabar, hasil, papan, layar, reset, pemeriksa, qa };
+  return { datang, periksa, kabar, hasil, antrean, papan, layar, reset, pemeriksa, qa };
 }

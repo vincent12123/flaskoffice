@@ -177,6 +177,7 @@ const kantorDibuat = {};      // '2d' | '3d' → objek kantor, dibuat saat perta
 let kantor = null;
 let modeKantor = null;
 let namaLulus = [];
+let sesi = null;          // data sesi terakhir dari server
 
 function pilihanKantor() {
   try { return localStorage.getItem(KUNCI_KANTOR) === '2d' ? '2d' : '3d'; } catch { return '3d'; }
@@ -205,7 +206,13 @@ async function pakaiKantor(mode) {
   modeKantor = mode;
   kantor.reset();
   kantor.papan(namaLulus);
+  kantor.antrean(antreanKantor());
   $('ganti-kantor').textContent = mode === '3d' ? 'Kantor 2D' : 'Kantor 3D';
+}
+
+/** Murid yang menunggu, urut antrean (sama dengan urutan "Periksa berikutnya"), untuk ruang tunggu kantor. */
+function antreanKantor() {
+  return (sesi?.kiriman ?? []).filter((k) => k.status === 'menunggu').map(({ id, nama }) => ({ id, nama }));
 }
 
 let siapKantor = pakaiKantor(pilihanKantor());
@@ -219,7 +226,6 @@ $('ganti-kantor').onclick = async () => {
 };
 
 let penguji = null;      // dibuat saat pertama kali membuka sesi (memuat Python ±15 MB)
-let sesi = null;          // data sesi terakhir dari server
 let timerSesi = null;
 let dipilih = null;       // id kiriman yang sedang ditampilkan
 let sibuk = false;
@@ -250,6 +256,7 @@ async function muatSesi(kode) {
   $('tutup-sesi').disabled = !sesi.buka;
   const menunggu = sesi.kiriman.filter((k) => k.status === 'menunggu').length;
   $('hitung').textContent = `(${menunggu} menunggu · ${sesi.kiriman.length} total)`;
+  kantor?.antrean(antreanKantor());
   $('berikutnya').disabled = sibuk || menunggu === 0;
 
   $('antrean').replaceChildren(...[...sesi.kiriman].reverse().map((k) => {
@@ -309,7 +316,7 @@ async function periksa(id) {
     const janjiHasil = sesi.mode === 'bebas' ? penguji.periksaBebas(k.berkas, kabar)
       : sesi.mode === 'pos' ? penguji.periksaPos(k.berkas, { uji: ujiPos(sesi.level), cek: cekPos(sesi.level) }, kabar)
         : penguji.periksa(k.berkas, L);
-    await kantor.datang(k.nama);
+    await kantor.datang(k.nama, id);
     await kantor.periksa();
     diServer = true;
     const hasil = await janjiHasil;
@@ -322,6 +329,9 @@ async function periksa(id) {
       bebas: sesi.mode === 'bebas',
       skor: hasil.skor,
       bug: sesi.mode === 'bebas' ? hasil.ringkasan?.bug : hasil.butir?.filter((b) => !b.lulus).length + (hasil.error ? 1 : 0),
+      // lulus tetapi laporannya berisi peringatan/saran → Pemeriksa menjelaskan catatannya
+      saran: sesi.mode === 'bebas' ? (hasil.ringkasan?.peringatan ?? 0) + (hasil.ringkasan?.saran ?? 0) > 0 : !!hasil.butir?.some((b) => b.saran),
+      terhenti: hasil.terhenti,
     });
   } catch (err) {
     pesanHasil(err.message, 'gagal');

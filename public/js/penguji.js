@@ -92,7 +92,8 @@ export class Penguji {
 
   /**
    * Periksa kiriman untuk satu tiket.
-   * Mengembalikan { lulus, error?, butir: [{label, lulus, pesan, saran?}] }.
+   * Mengembalikan { lulus, error?, terhenti?, butir: [{label, lulus, pesan, saran?}] }.
+   * `terhenti`: 'waktu' (melewati batas waktu) atau 'error' (pemeriksa sendiri gagal) — dipakai adegan kantor.
    */
   async periksa(berkas, L) {
     await this.siap;
@@ -111,12 +112,13 @@ export class Penguji {
     try {
       hasil = (await this.kirim({ jenis: 'uji', berkas, kasus: L.kasus }, BATAS_TIKET_MS)).hasil;
     } catch (e) {
-      if (!e.waktuHabis) return { lulus: false, error: `Pemeriksa gagal: ${e.message}`, butir: butirCek };
+      if (!e.waktuHabis) return { lulus: false, error: `Pemeriksa gagal: ${e.message}`, terhenti: 'error', butir: butirCek };
       // Perulangan tanpa henti: hentikan worker lalu siapkan yang baru
       this.ulangWorker();
       return {
         lulus: false,
         error: 'Aplikasi berjalan terlalu lama (lebih dari 15 detik) dan dihentikan. Cari perulangan yang tidak pernah berhenti.',
+        terhenti: 'waktu',
         butir: butirCek,
       };
     }
@@ -143,11 +145,12 @@ export class Penguji {
       const progres = (p) => { if (p.test) onProgres(`test ${p.test} dari ${p.total}`); };
       hasil = (await this.kirim({ jenis: 'pos', berkas, uji }, BATAS_POS_MS, progres)).hasil;
     } catch (e) {
-      if (!e.waktuHabis) return { lulus: false, error: `Pemeriksa gagal: ${e.message}`, butir: butirCek };
+      if (!e.waktuHabis) return { lulus: false, error: `Pemeriksa gagal: ${e.message}`, terhenti: 'error', butir: butirCek };
       this.ulangWorker();
       return {
         lulus: false,
         error: `Test tidak selesai dalam ${BATAS_POS_MS / 1000} detik dan dihentikan. Cari perulangan yang tidak pernah berhenti.`,
+        terhenti: 'waktu',
         butir: butirCek,
       };
     }
@@ -159,7 +162,7 @@ export class Penguji {
   /**
    * Periksa proyek Flask apa pun (mode bebas). `onProgres(teks)` dipanggil saat
    * pemeriksa membuka halaman / mengirim form.
-   * Mengembalikan { lulus, skor, ringkasan, butir: [{tingkat, kategori, label, pesan, lokasi?}] }.
+   * Mengembalikan { lulus, skor, ringkasan, terhenti?, butir: [{tingkat, kategori, label, pesan, lokasi?}] }.
    */
   async periksaBebas(berkas, onProgres = () => {}) {
     await this.siap;
@@ -178,7 +181,7 @@ export class Penguji {
       }
     } catch (e) {
       if (!e.waktuHabis) {
-        return { lulus: false, skor: 0, error: `Pemeriksa gagal: ${e.message}`, butir: [], ringkasan: {} };
+        return { lulus: false, skor: 0, error: `Pemeriksa gagal: ${e.message}`, terhenti: 'error', butir: [], ringkasan: {} };
       }
       this.ulangWorker();
       // Laporan sebagian dari temuan yang sudah terkirim sebelum waktu habis
@@ -186,7 +189,7 @@ export class Penguji {
         tingkat: 'bug', kategori: 'Route', label: terakhir || 'Aplikasi', lulus: false,
         pesan: 'Pemeriksaan dihentikan karena tidak selesai dalam 60 detik. Kemungkinan ada perulangan tanpa henti di bagian ini.',
       });
-      laporan = { lulus: false, butir: sementara, ringkasan: {} };
+      laporan = { lulus: false, butir: sementara, ringkasan: {}, terhenti: 'waktu' };
       laporan.ringkasan = hitungRingkas(sementara);
       laporan.skor = Math.max(0, 100 - Math.min(60, laporan.ringkasan.bug * 12) - Math.min(25, laporan.ringkasan.peringatan * 4) - Math.min(15, laporan.ringkasan.saran));
     }

@@ -21,13 +21,25 @@ const KECEPATAN = 85;      // satuan dunia per detik (sama dengan piksel di vers
 const KETIK_MS = 28;       // jeda per huruf pada gelembung bicara
 const DASAR = { E: 'S', M: 'S', T: 'S' };   // isi kepala di belakang mata/mulut
 
-// Denah lantai: x kiri→kanan (0–480), z dinding belakang→depan (0–270).
-// Pintu ada di dinding kanan, supaya siswa yang mengetuk tetap terlihat dari kamera.
+// Denah lantai: x kiri→kanan, z dinding belakang→depan (0–270).
+//   x −170..0  ruang tunggu (kursi murid, layar antrean)
+//   x    0..480 ruang periksa; pintu masuk di dinding kiri (x = 0), pintu keluar di dinding kanan
+//              (x = 484) menuju taman — murid yang masuk dan keluar tidak berpapasan.
 const TEMPAT = {
-  luar: { x: 545, z: 172 }, pintu: { x: 502, z: 172 }, sambutPintu: { x: 452, z: 172 },
-  meja: { x: 258, z: 130 }, depanMeja: { x: 205, z: 162 },
-  server: { x: 425, z: 80 }, sampingServer: { x: 372, z: 98 }, pojokQA: { x: 440, z: 210 },
+  // ruang tunggu
+  koridor: { x: -215, z: 228 }, masukTunggu: { x: -150, z: 228 }, lorongTunggu: { x: -60, z: 140 },
+  depanPintuMasuk: { x: -22, z: 172 },
+  // ruang periksa
+  balikPintuMasuk: { x: 34, z: 172 }, sambutPintuMasuk: { x: 30, z: 214 },
+  kursiTamu: { x: 150, z: 118 }, sampingMurid: { x: 196, z: 176 },
+  meja: { x: 258, z: 130 }, sampingPemeriksa: { x: 296, z: 136 }, depanPapan: { x: 96, z: 40 },
+  mejaDev: { x: 326, z: 66 }, terminal: { x: 380, z: 70 }, sampingServer: { x: 366, z: 104 },
+  pojokQA: { x: 440, z: 210 },
+  // keluar
+  lorongKeluar: { x: 190, z: 205 }, depanPintuKeluar: { x: 452, z: 196 }, pintu: { x: 502, z: 172 }, luar: { x: 548, z: 172 },
 };
+// Empat kursi tunggu satu baris, menghadap kamera
+const KURSI_TUNGGU = [-150, -118, -86, -54].map((x) => ({ x, z: 72 }));
 const ARAH_MEJA = Math.PI;      // membelakangi kamera, menghadap monitor/server
 // Tinggi karakter Mixamo (Pemeriksa). Lebih tinggi dari voxel (48) karena tubuh manusia yang ramping
 // tampak lebih kecil daripada sprite voxel yang gempal pada tinggi yang sama.
@@ -70,19 +82,34 @@ export function buatKantor3D(wadah) {
   const adegan = new THREE.Scene();
   adegan.background = new THREE.Color('#efe6d2');
 
+  // Kamera menatap seluruh kantor (ruang tunggu sampai pintu keluar). Ia hanya bergeser pelan pada
+  // tiga momen — murid dipanggil, kode dibawa ke server, kembali luas — supaya tidak melelahkan di proyektor.
   const kamera = new THREE.PerspectiveCamera(20, 16 / 9, 50, 3000);
-  const SASARAN = new THREE.Vector3(278, 22, 136);
   const SUDUT = THREE.MathUtils.degToRad(48);
-  kamera.position.copy(SASARAN).add(new THREE.Vector3(0, Math.sin(SUDUT), Math.cos(SUDUT)).multiplyScalar(940));
-  kamera.lookAt(SASARAN);
+  const arahKamera = new THREE.Vector3(0, Math.sin(SUDUT), Math.cos(SUDUT));
+  const FOKUS = {
+    luas: { x: 180, z: 136, jarak: 1150 },
+    panggil: { x: 90, z: 140, jarak: 1000 },
+    server: { x: 300, z: 120, jarak: 1000 },
+  };
+  const fokusKini = { ...FOKUS.luas };
+  let fokusTujuan = FOKUS.luas;
+  const sasaranKamera = new THREE.Vector3();
+  function aturKamera() {
+    sasaranKamera.set(fokusKini.x, 22, fokusKini.z);
+    kamera.position.copy(sasaranKamera).addScaledVector(arahKamera, fokusKini.jarak);
+    kamera.lookAt(sasaranKamera);
+  }
+  aturKamera();
+  const fokus = (nama) => { fokusTujuan = FOKUS[nama]; };
 
   adegan.add(new THREE.HemisphereLight('#fff7ea', '#b59a72', 1.7));
   const matahari = new THREE.DirectionalLight('#ffffff', 1.9);
-  matahari.position.set(140, 320, 300);
-  matahari.target.position.set(260, 0, 130);
+  matahari.position.set(60, 320, 300);
+  matahari.target.position.set(180, 0, 130);
   matahari.castShadow = true;
-  matahari.shadow.mapSize.set(1024, 1024);
-  Object.assign(matahari.shadow.camera, { left: -330, right: 330, top: 230, bottom: -230, near: 50, far: 900 });
+  matahari.shadow.mapSize.set(2048, 1024);
+  Object.assign(matahari.shadow.camera, { left: -420, right: 420, top: 230, bottom: -230, near: 50, far: 900 });
   matahari.shadow.bias = -0.0008;
   adegan.add(matahari, matahari.target);
 
@@ -156,6 +183,18 @@ export function buatKantor3D(wadah) {
     lantai.position.set(240, 0, 135);
     lantai.receiveShadow = true;
     adegan.add(lantai);
+    // Ruang tunggu: lantai ubin terang supaya jelas berbeda dari ruang periksa
+    const ubin = kanvas(340, 540);
+    ubin.ctx.fillStyle = '#e4e0d6';
+    ubin.ctx.fillRect(0, 0, 340, 540);
+    ubin.ctx.fillStyle = 'rgba(120,110,95,.22)';
+    for (let i = 0; i <= 340; i += 40) ubin.ctx.fillRect(i, 0, 2, 540);
+    for (let j = 0; j <= 540; j += 40) ubin.ctx.fillRect(0, j, 340, 2);
+    const lantaiTunggu = new THREE.Mesh(new THREE.PlaneGeometry(170, 270), new THREE.MeshLambertMaterial({ map: ubin.tekstur }));
+    lantaiTunggu.rotation.x = -Math.PI / 2;
+    lantaiTunggu.position.set(-85, 0, 135);
+    lantaiTunggu.receiveShadow = true;
+    adegan.add(lantaiTunggu);
   }
   // Rumput & jalan setapak di luar pintu
   kotak(488, -2, -8, 620, -0.2, 290, '#a7c98a');
@@ -163,23 +202,45 @@ export function buatKantor3D(wadah) {
   kotak(490, 0, 156, 520, 0.8, 188, '#a08060');                 // keset
 
   // Dinding belakang + plint, dinding samping rendah (ruangan "dipotong" seperti diorama)
-  kotak(-8, 0, -10, 488, 112, 0, '#d8c6a0');
-  kotak(-8, 0, 0, 480, 8, 1.5, '#8a6f52');
-  kotak(-8, 0, 0, 0, 16, 270, '#cdb892');
+  kotak(-178, 0, -10, 488, 112, 0, '#d8c6a0');
+  kotak(-178, 0, 0, 480, 8, 1.5, '#8a6f52');
+  kotak(-178, 0, 0, -170, 16, 200, '#cdb892');         // dinding kiri ruang tunggu, celah koridor di z 200–256
+  kotak(-178, 0, 256, -170, 16, 270, '#cdb892');
+  kotak(-4, 0, 0, 4, 16, 148, '#cdb892');               // sekat ruang tunggu | ruang periksa
+  kotak(-4, 0, 197, 4, 16, 270, '#cdb892');
   kotak(480, 0, 0, 488, 16, 148, '#cdb892');
   kotak(480, 0, 197, 488, 16, 270, '#cdb892');
 
-  // Kusen & daun pintu (engsel di z = 150)
-  kotak(479, 0, 145, 489, 80, 150, '#7d5a39');
-  kotak(479, 0, 195, 489, 80, 200, '#7d5a39');
-  kotak(479, 75, 145, 489, 82, 200, '#7d5a39');
-  const engsel = new THREE.Group();
-  engsel.position.set(484, 0, 150);
-  adegan.add(engsel);
-  kotak(-2, 0, 0.5, 2, 74, 44.5, '#8a6f52', engsel);
-  kotak(-2.6, 2, 3, 2.6, 72, 5, '#7a5f44', engsel);
-  kotak(-3.5, 34, 37, 3.5, 38, 41, '#e0c060', engsel);
-  let sudutPintu = 0, sudutPintuTarget = 0;
+  /** Kusen + daun pintu dengan engsel di (x, 150); `buka` = sudut daun saat terbuka (ke dalam ruang periksa). */
+  function buatPintu(x, buka) {
+    kotak(x - 5, 0, 145, x + 5, 80, 150, '#7d5a39');
+    kotak(x - 5, 0, 195, x + 5, 80, 200, '#7d5a39');
+    kotak(x - 5, 75, 145, x + 5, 82, 200, '#7d5a39');
+    const engsel = new THREE.Group();
+    engsel.position.set(x, 0, 150);
+    adegan.add(engsel);
+    kotak(-2, 0, 0.5, 2, 74, 44.5, '#8a6f52', engsel);
+    kotak(-2.6, 2, 3, 2.6, 72, 5, '#7a5f44', engsel);
+    kotak(-3.5, 34, 37, 3.5, 38, 41, '#e0c060', engsel);
+    return { engsel, x, buka, sudut: 0, target: 0 };
+  }
+  const pintuKeluar = buatPintu(484, -1.5);
+  const pintuMasuk = buatPintu(0, 1.5);
+
+  // Ruang tunggu: kursi, layar antrean, poster, tanaman
+  for (const { x, z } of KURSI_TUNGGU) {
+    kotak(x - 11, 12, z - 9, x + 11, 15, z + 7, '#4a7bd0');          // dudukan
+    kotak(x - 11, 15, z - 12, x + 11, 34, z - 9, '#4a7bd0');         // sandaran
+    for (const dx of [-9, 7]) kotak(x + dx, 0, z - 8, x + dx + 2, 12, z + 6, '#8a8d96');
+  }
+  kotak(-152, 46, 0, -48, 98, 3, '#2b2d33');                          // bingkai layar antrean
+  const antreanKanvas = kanvas(400, 192);
+  panel(-100, 72, 3.1, 98, 47, antreanKanvas.tekstur, true);
+  kotak(-36, 52, 0, -12, 84, 1.5, '#f0e2c0');                         // poster "Tertib antre"
+  kotak(-33, 74, 1.5, -15, 78, 1.8, '#c26a12');
+  kotak(-33, 66, 1.5, -18, 68, 1.8, '#9a8a70');
+  kotak(-33, 61, 1.5, -21, 63, 1.8, '#9a8a70');
+  kotak(-230, -2, 200, -176, -0.2, 256, '#d6c39b');                   // lantai koridor
 
   // Jendela
   const kaca = new THREE.MeshBasicMaterial({ color: '#b9e0f8' });
@@ -284,11 +345,62 @@ export function buatKantor3D(wadah) {
   kotak(429.5, 23, 228, 430.5, 26.2, 240, '#2f5fb3');
   silinder(452, 23, 234, 3, 29, '#6b3a1a');
 
-  // Tanaman pot
-  kotak(16, 0, 228, 40, 14, 252, '#a0764e');
+  // Tanaman pot di pojok ruang tunggu (diam; tidak ada angin di dalam ruangan)
+  kotak(-164, 0, 18, -140, 14, 42, '#a0764e');
   for (const [x, y, z, w] of [[22, 14, 234, '#6aa84f'], [30, 14, 236, '#5a9440'], [24, 22, 238, '#7cbb5c'],
     [32, 22, 232, '#6aa84f'], [26, 30, 234, '#5a9440'], [20, 22, 242, '#5a9440'], [30, 30, 242, '#7cbb5c'], [27, 38, 238, '#6aa84f']]) {
-    kotak(x - 1, y, z - 1, x + 9, y + 9, z + 9, w);
+    kotak(x - 181, y, z - 211, x - 171, y + 9, z - 201, w);
+  }
+
+  // Meja Developer: monitor kode (kanvas) & kursi, di bawah jendela kanan
+  kotak(296, 26, 22, 358, 30, 46, '#a0764e');
+  for (const [x, z] of [[298, 24], [352, 24], [298, 40], [352, 40]]) kotak(x, 0, z, x + 4, 26, z + 4, '#7d5a39');
+  kotak(322, 30, 30, 330, 35, 35, '#2b2f3a');
+  kotak(302, 34, 26, 350, 62, 31, '#2b2f3a');
+  const layarDevKanvas = kanvas(256, 136);
+  panel(326, 48, 31.1, 44, 24, layarDevKanvas.tekstur, true);
+  kotak(310, 30, 36, 342, 31.5, 43, '#3a3d45');                       // keyboard
+  const kursiDev = new THREE.Group();
+  kursiDev.position.set(TEMPAT.mejaDev.x, 0, TEMPAT.mejaDev.z);
+  adegan.add(kursiDev);
+  kotak(-10, 12, -9, 10, 15, 9, '#3a3d45', kursiDev);
+  kotak(-10, 15, 8, 10, 27, 11, '#3a3d45', kursiDev);
+  kotak(-1.5, 3, -1.5, 1.5, 12, 1.5, '#8a8d96', kursiDev);
+  kotak(-9, 1, -1, 9, 3, 1, '#2b2d33', kursiDev);
+  kotak(-1, 1, -9, 1, 3, 9, '#2b2d33', kursiDev);
+
+  // Terminal di samping rak server: tempat kartu kode dimasukkan
+  kotak(368, 0, 26, 392, 38, 42, '#4a4d56');
+  kotak(371, 30, 42, 389, 32, 43, '#1d1f24');                         // celah kartu
+  kotak(368, 38, 30, 392, 58, 35, '#2b2f3a');
+  const terminalKanvas = kanvas(192, 128);
+  panel(380, 48, 35.1, 20, 14, terminalKanvas.tekstur, true);
+
+  // Kursi tamu di ujung kiri meja Pemeriksa (murid duduk menghadap Pemeriksa)
+  const kursiTamu = new THREE.Group();
+  kursiTamu.position.set(TEMPAT.kursiTamu.x, 0, TEMPAT.kursiTamu.z);
+  kursiTamu.rotation.y = 0.9;
+  adegan.add(kursiTamu);
+  kotak(-11, 12, -9, 11, 15, 7, '#c26a12', kursiTamu);
+  kotak(-11, 15, -12, 11, 32, -9, '#c26a12', kursiTamu);
+  for (const dx of [-9, 7]) kotak(dx, 0, -8, dx + 2, 12, 6, '#7d5a39', kursiTamu);
+
+  // Kipas angin berdiri di pojok depan ruang periksa
+  kotak(14, 0, 238, 30, 2, 254, '#3a3d45');
+  kotak(21, 2, 245, 23, 44, 247, '#8a8d96');
+  const kipas = new THREE.Group();
+  kipas.position.set(22, 48, 246);
+  kipas.rotation.y = 0.7;                       // menghadap ke tengah ruangan
+  adegan.add(kipas);
+  kotak(-4, -4, -6, 4, 4, 0, '#3a3d45', kipas);
+  const baling = new THREE.Group();
+  baling.position.z = 1;
+  kipas.add(baling);
+  for (let i = 0; i < 3; i++) {
+    const daun = new THREE.Group();
+    daun.rotation.z = (i * Math.PI * 2) / 3;
+    kotak(-2.5, 1, -0.4, 2.5, 10, 0.4, '#c8d8f0', daun);
+    baling.add(daun);
   }
 
   // -------------------------------------------------------------------
@@ -332,7 +444,7 @@ export function buatKantor3D(wadah) {
     kamera.aspect = w / h;
     kamera.updateProjectionMatrix();
     lebarLapisan = w; tinggiLapisan = h;
-    lapisan.style.fontSize = `${(w / 480 * 7).toFixed(2)}px`;
+    lapisan.style.fontSize = `${(w / 560 * 7).toFixed(2)}px`;
   }
   new ResizeObserver(ukurUlang).observe(akar);
 
@@ -406,6 +518,11 @@ export function buatKantor3D(wadah) {
       semua.delete(k);
       adegan.remove(grup);
       voxel.dispose();
+      // bahan warna salinan milik murid ini (geometri model dipakai bersama, tidak dibuang)
+      k.rig?.tubuh.traverse((c) => {
+        if (!c.isMesh) return;
+        for (const b of [c.material].flat()) if (b.userData.salinan) b.dispose();
+      });
       for (const e of [label, k.ikonEl, k.gelembung, ...k.tempelan]) e.remove();
     };
     k.setNama(nama);
@@ -619,10 +736,15 @@ export function buatKantor3D(wadah) {
       const dunia = o.getWorldQuaternion(new THREE.Quaternion());
       tulang[kanonik] = { o, lokal: o.quaternion.clone(), dunia, duniaInv: dunia.clone().invert() };
     }
-    const tinggiAsli = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).y;
+    const kotakModel = new THREE.Box3().setFromObject(model);
+    const tinggiAsli = kotakModel.getSize(new THREE.Vector3()).y;
+    const skala = tinggi / tinggiAsli;
+    // Untuk pose duduk: tinggi pangkal paha & lutut di atas lantai (satuan dunia)
+    const yDunia = (t) => (t.o.getWorldPosition(new THREE.Vector3()).y - kotakModel.min.y) * skala;
+    const tinggiPaha = yDunia(tulang.LeftUpLeg), tinggiLutut = yDunia(tulang.LeftLeg);
     const tubuh = new THREE.Group();
     tubuh.add(model);
-    tubuh.scale.setScalar(tinggi / tinggiAsli);
+    tubuh.scale.setScalar(skala);
 
     const mixer = new THREE.AnimationMixer(model);
     const aksi = {};
@@ -634,7 +756,7 @@ export function buatKantor3D(wadah) {
     k.minifig = null;
     k.badan.add(tubuh);
     k.gambar = () => {};
-    k.rig = { tubuh, tulang, mixer, aksi, slot: null, sudut: {}, lapis: {}, langkah: 0 };
+    k.rig = { tubuh, tulang, mixer, aksi, slot: null, sudut: {}, lapis: {}, langkah: 0, tinggiPaha, tinggiLutut };
     k.tinggi = tinggi;
   }
 
@@ -714,21 +836,53 @@ export function buatKantor3D(wadah) {
     poseProsedural(k, dt, keadaan);
   }
 
-  /** Gerak ringan di atas klip "diam" untuk keadaan tanpa klip sendiri (dihaluskan supaya tidak menyentak). */
+  /**
+   * Gerak ringan di atas klip "diam" untuk keadaan tanpa klip sendiri (dihaluskan supaya tidak menyentak).
+   * `k.toleh` (−1..1) memutar kepala ke kiri/kanan karakter tanpa memutar badan — dipakai murid yang duduk.
+   */
   function lapisanPose(k, dt, keadaan) {
     const m = k.rig, T = m.tulang;
-    const t = { kepala: 0, punggung: 0, lenganKa: 0, siku: 0, lenganKedua: 0 };
+    const t = { kepala: 0, punggung: 0, lenganKa: 0, siku: 0, lenganKi: 0, sikuKi: 0, lenganKedua: 0, toleh: (k.toleh ?? 0) * 0.7 };
+    const getar = Math.sin(k.napas * 18) * 0.12;
     if (keadaan === 'bicara') { t.lenganKa = -0.45; t.siku = 0.5 + Math.sin(k.napas * 9) * 0.25; t.kepala = Math.sin(k.napas * 14) * 0.05; }
     if (keadaan === 'sedih') { t.kepala = 0.4; t.punggung = 0.15; }
     if (keadaan === 'kaget') { t.lenganKedua = -0.8; t.kepala = -0.12; }
-    if (keadaan === 'ketik' || keadaan === 'pikir' || keadaan === 'baca') t.kepala = 0.22;
+    if (keadaan === 'pikir' || keadaan === 'baca') t.kepala = 0.22;
+    if (keadaan === 'baca') { t.lenganKa = t.lenganKi = -0.7; t.siku = t.sikuKi = 0.9; }
+    // mengetik (di laptop pangkuan, keyboard, atau terminal): dua lengan ke depan, jari bergantian
+    if (keadaan === 'ketik') { t.kepala = 0.22; t.lenganKa = -0.6 + getar; t.lenganKi = -0.6 - getar; t.siku = t.sikuKi = 1.0; }
+    if (keadaan === 'jempol') { t.lenganKa = -1.3; t.siku = 1.2; t.kepala = -0.08; }
+    if (keadaan === 'tunjuk') { t.lenganKa = -1.25; t.siku = 0.1; }
+    if (keadaan === 'angkat') { t.lenganKa = -2.7; t.siku = 0.2; }
+    if (keadaan === 'regang') { t.lenganKa = t.lenganKi = -2.8; t.punggung = -0.1; }
+    if (keadaan === 'angguk') t.kepala = 0.12 + Math.sin(k.napas * 11) * 0.22;
     for (const [n, v] of Object.entries(t)) m.lapis[n] = (m.lapis[n] ?? 0) + (v - (m.lapis[n] ?? 0)) * Math.min(1, dt * 10);
     const s = m.lapis;
-    if (Math.abs(s.kepala) > 1e-3) tambahTulang(T.Head, [['x', s.kepala]]);
+    if (Math.abs(s.kepala) > 1e-3 || Math.abs(s.toleh) > 1e-3) tambahTulang(T.Head, [['y', s.toleh], ['x', s.kepala]]);
     if (Math.abs(s.punggung) > 1e-3) tambahTulang(T.Spine1, [['x', s.punggung]]);
     if (Math.abs(s.lenganKa) > 1e-3 || Math.abs(s.lenganKedua) > 1e-3) tambahTulang(T.RightArm, [['x', s.lenganKa + s.lenganKedua]]);
-    if (Math.abs(s.lenganKedua) > 1e-3) tambahTulang(T.LeftArm, [['x', s.lenganKedua]]);
+    if (Math.abs(s.lenganKi) > 1e-3 || Math.abs(s.lenganKedua) > 1e-3) tambahTulang(T.LeftArm, [['x', s.lenganKi + s.lenganKedua]]);
     if (Math.abs(s.siku) > 1e-3) tambahTulang(T.RightForeArm, [['x', -s.siku]]);
+    if (Math.abs(s.sikuKi) > 1e-3) tambahTulang(T.LeftForeArm, [['x', -s.sikuKi]]);
+  }
+
+  /**
+   * Pose duduk prosedural (klip Quaternius tidak punya klip duduk): paha diputar ke depan, lutut
+   * ditekuk, badan diturunkan setinggi paha. `k.duduk` 0..1 dihaluskan supaya bangkit/duduk terlihat.
+   * Mengembalikan seberapa jauh badan diturunkan.
+   */
+  function poseDuduk(k, dt) {
+    const m = k.rig;
+    k.dudukKini = (k.dudukKini ?? 0) + ((k.duduk ? 1 : 0) - (k.dudukKini ?? 0)) * Math.min(1, dt * 5);
+    const d = k.dudukKini;
+    if (d < 0.01) return 0;
+    const T = m.tulang;
+    const goyang = k.goyangKaki ? Math.sin(k.napas * 12) * 0.18 : 0;
+    putarTulang(T.LeftUpLeg, [['x', -1.45 * d]]);
+    putarTulang(T.RightUpLeg, [['x', -1.45 * d]]);
+    putarTulang(T.LeftLeg, [['x', (1.45 + goyang) * d]]);
+    putarTulang(T.RightLeg, [['x', (1.45 - goyang) * d]]);
+    return (m.tinggiPaha - m.tinggiLutut) * 0.92 * d;
   }
 
   /**
@@ -797,11 +951,14 @@ export function buatKantor3D(wadah) {
         .catch((e) => console.warn('Minifig Pemeriksa gagal dimuat, memakai voxel:', e));
     });
   const qa = buatKarakter({ nama: 'QA', baju: '#8e5bd0', rambut: 'jambul', H: '#1d1d1d', mulai: TEMPAT.pojokQA, warnaLabel: '#6a3fb0' });
+  const developer = buatKarakter({ nama: 'Developer', baju: '#2f6b4f', rambut: 'pendek', H: '#141414', mulai: TEMPAT.mejaDev, warnaLabel: '#2a7a55', arah: ARAH_MEJA });
+  developer.duduk = true;
   let siswa = null;
 
   // QA (Worker) dan dua model siswa dari Quaternius Ultimate Modular Men (CC0). Model siswa dimuat
-  // sekali lalu digandakan (SkeletonUtils.clone) untuk tiap kiriman. Gagal → tetap voxel.
-  const TINGGI_QA = 58, TINGGI_SISWA = 52;
+  // sekali lalu digandakan (SkeletonUtils.clone) untuk tiap kiriman; Developer memakai model hoodie
+  // dengan warna tetap. Gagal → tetap voxel.
+  const TINGGI_QA = 58, TINGGI_SISWA = 52, TINGGI_DEV = 56;
   const siapQuaternius = (async () => {
     const [{ clone }, gltfQa, ...gltfSiswa] = await Promise.all([
       import('/vendor/three-addons/utils/SkeletonUtils.js'),
@@ -818,9 +975,31 @@ export function buatKantor3D(wadah) {
       { gltf: gltfSiswa[0], baju: ['LightBrown'], celana: ['LightBlue'] },
       { gltf: gltfSiswa[1], baju: ['Purple'], celana: ['LightBlue'] },
     ];
-    return { clone, varian: varian.map((v) => ({ ...v, klip: klipQuaternius(v.gltf) })) };
+    const q = { clone, varian: varian.map((v) => ({ ...v, klip: klipQuaternius(v.gltf) })) };
+    // Developer: hoodie hijau tua, celana gelap, rambut hitam
+    pasangModel(developer, warnaiModel(q.clone(q.varian[1].gltf.scene), new Map([
+      ['Skin', '#d9a47c'], ['Skin_Darker', new THREE.Color('#d9a47c').multiplyScalar(0.8)], ['Hair', '#141414'], ['Eyebrows', '#141414'],
+      ['Purple', '#2f6b4f'], ['LightBlue', '#2b2f3a'],
+    ])), { klip: q.varian[1].klip, rangka: 'quaternius', tinggi: TINGGI_DEV });
+    return q;
   })();
   siapQuaternius.catch((err) => console.warn('Karakter Quaternius gagal dimuat, QA & siswa memakai voxel:', err));
+
+  /** Ganti warna bahan bernama (Skin, Hair, …) pada salinan model; bahan dikloning supaya model lain tidak ikut berubah. */
+  function warnaiModel(model, warna) {
+    model.traverse((c) => {
+      if (!c.isMesh) return;
+      const ganti = (b) => {
+        if (!warna.has(b.name)) return b;
+        const baru = b.clone();
+        baru.color.set(warna.get(b.name));
+        baru.userData.salinan = true;      // dibuang bersama karakternya (k.hapus)
+        return baru;
+      };
+      c.material = Array.isArray(c.material) ? c.material.map(ganti) : ganti(c.material);
+    });
+    return model;
+  }
 
   const KULIT = ['#f1c9a5', '#e0ac82', '#c68e63', '#a8714d', '#8a5a3c'];
   const RAMBUT = ['#1d1612', '#2b1d12', '#3b2a1a', '#4a2f1f', '#141414'];
@@ -841,23 +1020,111 @@ export function buatKantor3D(wadah) {
     if (k.dihapus) return;
     const p = penampilan3D(nama);
     const v = q.varian[p.varian];
-    const model = q.clone(v.gltf.scene);
-    const warna = new Map([
+    const model = warnaiModel(q.clone(v.gltf.scene), new Map([
       ['Skin', p.kulit], ['Skin_Darker', new THREE.Color(p.kulit).multiplyScalar(0.8)],
       ['Hair', p.rambut], ['Eyebrows', p.rambut],
       ...v.baju.map((n) => [n, p.baju]), ...v.celana.map((n) => [n, p.celana]),
-    ]);
-    model.traverse((c) => {
-      if (!c.isMesh) return;
-      const ganti = (b) => {
-        if (!warna.has(b.name)) return b;
-        const baru = b.clone();
-        baru.color.set(warna.get(b.name));
-        return baru;
-      };
-      c.material = Array.isArray(c.material) ? c.material.map(ganti) : ganti(c.material);
-    });
+    ]));
     pasangModel(k, model, { klip: v.klip, rangka: 'quaternius', tinggi: TINGGI_SISWA });
+  }
+
+  /** Murid baru (voxel dulu, model 3D menyusul bila siap). */
+  function buatMurid(nama, mulai, arah = 0) {
+    const tampil = penampilan(nama);
+    const k = buatKarakter({ nama, baju: '#f4f4f4', celana: '#6b6f78', rambut: tampil.rambut, H: tampil.H, S: tampil.S, mulai, warnaLabel: '#c26a12', arah });
+    pasangSiswa3D(k, nama).catch((err) => console.warn('Model siswa gagal dipasang, memakai voxel:', err));
+    return k;
+  }
+
+  // -------------------------------------------------------------------
+  // Benda adegan: map proyek (map kuning berisi kartu kode biru), laptop, catatan
+  // -------------------------------------------------------------------
+  const bendaDibawa = new Set();
+  const kartuKanvas = kanvas(64, 40);
+  kartuKanvas.ctx.fillStyle = '#4f8cff';
+  kartuKanvas.ctx.fillRect(0, 0, 64, 40);
+  kartuKanvas.ctx.fillStyle = '#ffffff';
+  kartuKanvas.ctx.font = 'bold 22px monospace';
+  kartuKanvas.ctx.textAlign = 'center';
+  kartuKanvas.ctx.textBaseline = 'middle';
+  kartuKanvas.ctx.fillText('</>', 32, 21);
+  const bahanKartu = new THREE.MeshBasicMaterial({ map: kartuKanvas.tekstur, toneMapped: false });
+
+  /** Benda kecil (Group) yang bisa dibawa karakter, diletakkan, atau diterbangkan ke titik lain. */
+  function buatBenda(jenis) {
+    const g = new THREE.Group();
+    if (jenis === 'map') {
+      kotak(-6, -8, -0.6, 6, 8, 0.6, '#f2c14e', g);
+      kotak(-6, 6, -0.7, -1, 9, 0.7, '#e0a830', g);                          // tab map
+      const kartu = new THREE.Mesh(new THREE.PlaneGeometry(9, 5.6), bahanKartu);
+      kartu.position.set(0, 1, 0.75);
+      g.add(kartu);
+    } else if (jenis === 'kartu') {
+      kotak(-4.5, -2.8, -0.3, 4.5, 2.8, 0.3, '#2f5fb3', g);
+      const muka = new THREE.Mesh(new THREE.PlaneGeometry(8.6, 5.4), bahanKartu);
+      muka.position.z = 0.35;
+      g.add(muka);
+    } else if (jenis === 'laptop') {
+      kotak(-7, 0, -5, 7, 1, 5, '#8a8d96', g);
+      const tutup = new THREE.Group();
+      tutup.position.set(0, 1, -5);
+      tutup.rotation.x = -0.35;
+      kotak(-7, 0, -0.5, 7, 9, 0.5, '#8a8d96', tutup);
+      kotak(-6, 1, 0.5, 6, 8, 0.7, '#9fd0ff', tutup);
+      g.add(tutup);
+    } else if (jenis === 'catatan') {
+      kotak(-4, -4, -0.2, 4, 4, 0.2, '#ffe58a', g);
+    }
+    g.traverse((c) => { if (c.isMesh) c.castShadow = true; });
+    g.rotation.order = 'YXZ';      // miring (x) dihitung setelah arah hadap (y) → map bisa tergeletak datar di meja
+    adegan.add(g);
+    const b = { m: g, oleh: null, jenis };
+    bendaDibawa.add(b);
+    return b;
+  }
+
+  function buangBenda(b) {
+    if (!b) return;
+    bendaDibawa.delete(b);
+    adegan.remove(b.m);
+    // muka kartu (PlaneGeometry) dibuat per benda; kotak memakai geomKotak bersama
+    b.m.traverse((c) => { if (c.isMesh && c.geometry !== geomKotak) c.geometry.dispose(); });
+  }
+
+  /** Benda dipegang `k` (mengikuti tangannya); opsi: maju, tinggi, miring. */
+  function pegang(b, k, opsi = {}) {
+    Object.assign(b, { oleh: k, maju: 10, tinggi: 27, miring: 0 }, opsi);
+  }
+
+  /** Terbangkan benda ke titik (x, y, z) dalam lengkung pendek; benda lalu diam di sana. */
+  function terbangkan(b, x, y, z, { detik = 0.6, miring = 0 } = {}) {
+    const a = b.m.position.clone(), tujuan = new THREE.Vector3(x, y, z);
+    const puncak = a.clone().lerp(tujuan, 0.5).setY(Math.max(a.y, y) + 18);
+    const r0 = b.m.rotation.x;
+    b.oleh = null;
+    let t = 0;
+    return new Promise((selesai) => {
+      animasi.add((dt) => {
+        t = Math.min(1, t + dt / detik);
+        const u = 1 - t;
+        b.m.position.set(
+          u * u * a.x + 2 * u * t * puncak.x + t * t * tujuan.x,
+          u * u * a.y + 2 * u * t * puncak.y + t * t * tujuan.y,
+          u * u * a.z + 2 * u * t * puncak.z + t * t * tujuan.z,
+        );
+        b.m.rotation.x = r0 + (miring - r0) * t;
+        if (t < 1) return true;
+        selesai();
+        return false;
+      });
+    });
+  }
+  /** Titik tangan karakter `k` (untuk serah-terima). */
+  const tangan = (k, maju = 10, tinggi = 27) => [k.pos.x + Math.sin(k.arah) * maju, tinggi - (k.dudukKini ?? 0) * 9, k.pos.z + Math.cos(k.arah) * maju];
+  /** Serahkan benda dari pegangan siapa pun ke tangan `ke`. */
+  async function serahkan(b, ke, opsi) {
+    await terbangkan(b, ...tangan(ke));
+    pegang(b, ke, opsi);
   }
 
   // -------------------------------------------------------------------
@@ -908,6 +1175,7 @@ export function buatKantor3D(wadah) {
   // Gerak: requestAnimationFrame + interpolasi
   // -------------------------------------------------------------------
   let terakhir = performance.now();
+  let kedipKursorTerakhir = null, barisTerminalTerakhir = -1, halamanAntreanTerakhir = -1;
   let debuCooldown = 0;
   let dijeda = false;
   let waktu = 0;
@@ -959,7 +1227,9 @@ export function buatKantor3D(wadah) {
       k.grup.rotation.y = k.arah;
       if (k.rig) {
         poseRig(k, dt, k.rute.length > 0);
-        naik = k.lompat > 0 ? naik : 0;
+        naik = (k.lompat > 0 ? naik : 0) - poseDuduk(k, dt);
+      } else if (k.duduk) {
+        naik = -10;     // voxel cadangan: cukup diturunkan ke dudukan
       }
       if (k.minifig) {
         poseMinifig(k, dt, k.rute.length > 0);
@@ -979,9 +1249,38 @@ export function buatKantor3D(wadah) {
     kursiX += ((duduk ? 0 : KURSI_GESER) - kursiX) * Math.min(1, dt * 8);
     kursi.position.x = TEMPAT.meja.x + kursiX;
 
-    // Pintu, jam, server
-    sudutPintu += (sudutPintuTarget - sudutPintu) * Math.min(1, dt * 10);
-    engsel.rotation.y = sudutPintu;
+    // Kursi Developer bergeser ke samping bila Developer tidak sedang duduk di sana
+    const devDuduk = developer.duduk && Math.hypot(developer.pos.x - TEMPAT.mejaDev.x, developer.pos.z - TEMPAT.mejaDev.z) < 2;
+    kursiDev.position.x += ((TEMPAT.mejaDev.x + (devDuduk ? 0 : -18)) - kursiDev.position.x) * Math.min(1, dt * 8);
+
+    // Benda yang dibawa karakter (map, kartu, laptop) mengikuti tangan pemiliknya
+    for (const b of bendaDibawa) {
+      if (!b.oleh) continue;
+      const k = b.oleh, duduk = k.dudukKini ?? 0;
+      const maju = b.maju ?? 10, tinggi = (b.tinggi ?? 27) - duduk * 9;
+      b.m.position.set(k.pos.x + Math.sin(k.arah) * maju, tinggi + (k.badan.position.y > 0 ? k.badan.position.y : 0), k.pos.z + Math.cos(k.arah) * maju);
+      b.m.rotation.set(b.miring ?? 0, k.arah, 0);
+    }
+
+    // Pintu: perlambatan alami saat membuka & menutup
+    for (const p of [pintuKeluar, pintuMasuk]) {
+      p.sudut += (p.target - p.sudut) * Math.min(1, dt * 6);
+      p.engsel.rotation.y = p.sudut;
+    }
+
+    // Kamera bergeser pelan ke fokus yang dipilih adegan
+    const lajuKamera = Math.min(1, dt * 1.1);
+    for (const n of ['x', 'z', 'jarak']) fokusKini[n] += (fokusTujuan[n] - fokusKini[n]) * lajuKamera;
+    aturKamera();
+
+    // Kipas berputar pelan; kursor monitor berkedip saat siaga
+    baling.rotation.z += dt * 7;
+    const kedipKursor = Math.floor(waktu * 2) % 2 === 0;
+    if (kedipKursor !== kedipKursorTerakhir) {
+      kedipKursorTerakhir = kedipKursor;
+      if (!serverSibuk && !teksLayar) gambarLayar();
+      if (!serverSibuk) gambarLayarDev();
+    }
     const kini = new Date();
     jarumMenit.rotation.z = -(kini.getMinutes() + kini.getSeconds() / 60) / 60 * Math.PI * 2;
     jarumJam.rotation.z = -((kini.getHours() % 12) + kini.getMinutes() / 60) / 12 * Math.PI * 2;
@@ -994,14 +1293,18 @@ export function buatKantor3D(wadah) {
       garisServer.material.opacity = 0.15 + denyut * 0.6;
       lampuServer.intensity = 0.4 + denyut * 1.6;
       gambarLayar((waktu % 2) / 2);
+      if (Math.floor(waktu * 6) !== barisTerminalTerakhir) { barisTerminalTerakhir = Math.floor(waktu * 6); gambarTerminal(); }
     }
+    // Layar antrean berganti informasi tiap 4 detik
+    const halamanAntrean = Math.floor(waktu / 4) % 2;
+    if (halamanAntrean !== halamanAntreanTerakhir) { halamanAntreanTerakhir = halamanAntrean; gambarAntrean(); }
 
     if (!dijeda) {
       renderer.render(adegan, kamera);
       for (const k of semua) {
         // teks mengikuti tinggi karakter (voxel 48, Pemeriksa Mixamo lebih tinggi)
         const { x, z } = k.pos, t = (k.tinggi ?? 48) + (k.naik || 0);
-        letakkan(k.label, x, t + 6, z, true);
+        letakkan(k.label, x, t + 6 + (k.labelNaik ?? 0) - (k.dudukKini ?? 0) * 12, z, true);
         letakkan(k.ikonEl, x + 10, t + 22, z);
         if (k.gelembung.firstChild) letakkan(k.gelembung, x, t + 32, z, true);
         for (const e of k.tempelan) letakkan(e, x, t + 44, z);
@@ -1011,14 +1314,32 @@ export function buatKantor3D(wadah) {
   }
   requestAnimationFrame(tick);
 
+  /**
+   * Jalan ke satu tujuan atau melewati beberapa titik berurutan. Tiap titik = nama di TEMPAT atau {x, z}.
+   * Jalur yang melewati perabot ditulis sebagai titik antara (lihat RUTE), bukan dicari otomatis.
+   */
   function jalan(k, tujuan) {
-    const t = TEMPAT[tujuan];
+    const titikRute = (Array.isArray(tujuan) ? tujuan : [tujuan]).map((t) => (typeof t === 'string' ? TEMPAT[t] : t));
     if (k.selesai) { const s = k.selesai; k.selesai = null; s(); }
-    if (Math.hypot(t.x - k.pos.x, t.z - k.pos.z) < 1) return Promise.resolve();
-    // Denah 3D sengaja dibuat lapang: semua tujuan bisa dicapai dengan garis lurus.
-    k.rute = [{ x: t.x, z: t.z }];
+    k.duduk = false;
+    const akhir = titikRute[titikRute.length - 1];
+    if (titikRute.length === 1 && Math.hypot(akhir.x - k.pos.x, akhir.z - k.pos.z) < 1) return Promise.resolve();
+    k.rute = titikRute.map(({ x, z }) => ({ x, z }));
     return new Promise((r) => { k.selesai = r; });
   }
+  // Jalur tetap supaya karakter tidak menembus meja, kursi, atau sekat
+  const RUTE = {
+    keKursiTamu: ['balikPintuMasuk', { x: 110, z: 150 }, 'kursiTamu'],
+    keluar: [{ x: 168, z: 160 }, 'lorongKeluar', 'depanPintuKeluar', 'pintu'],
+    devKePemeriksa: [{ x: 310, z: 100 }, 'sampingPemeriksa'],
+    devKeTerminal: [{ x: 330, z: 104 }, 'terminal'],
+    devKeMeja: [{ x: 350, z: 100 }, 'mejaDev'],
+    qaKeServer: [{ x: 400, z: 150 }, 'sampingServer'],
+    qaKeMurid: [{ x: 250, z: 175 }, 'sampingMurid'],
+    qaPulang: [{ x: 300, z: 185 }, 'pojokQA'],
+  };
+  /** Rute dari kursi tunggu ke depan pintu masuk (turun dulu ke lorong, lalu ke pintu). */
+  const ruteKePintuMasuk = (kursi) => [{ x: kursi.x, z: 120 }, 'lorongTunggu', 'depanPintuMasuk'];
 
   const hadap = (k, ke) => { k.arahTarget = panggung(Math.atan2(ke.pos.x - k.pos.x, ke.pos.z - k.pos.z)); };
   const hadapMeja = (k) => { k.arahTarget = ARAH_MEJA; };
@@ -1070,14 +1391,14 @@ export function buatKantor3D(wadah) {
     setTimeout(() => { k.tempelan.delete(e); e.remove(); }, 1900);
   }
 
-  function efekKetuk() {
-    for (let i = 0; i < 3; i++) setTimeout(() => efekLayar('cincin', 489, 40, 172, 520), i * 180);
-    efekLayar('tok', 492, 70, 172, 1000, 'TOK TOK');
+  function efekKetuk(p = pintuMasuk) {
+    for (let i = 0; i < 3; i++) setTimeout(() => efekLayar('cincin', p.x - 5, 40, 172, 520), i * 180);
+    efekLayar('tok', p.x - 8, 70, 172, 1000, 'TOK TOK');
     // daun pintu bergetar sedikit
     let t = 0;
     animasi.add((dt) => {
       t += dt;
-      engsel.position.x = 484 + Math.sin(t * 60) * 0.6 * Math.max(0, 1 - t / 0.5);
+      p.engsel.position.x = p.x + Math.sin(t * 60) * 0.6 * Math.max(0, 1 - t / 0.5);
       return t < 0.5;
     });
   }
@@ -1095,8 +1416,8 @@ export function buatKantor3D(wadah) {
     if (typeof skor === 'number') efekLayar('skor', k.pos.x, 96, k.pos.z, 2100, `${skor}`);
   }
 
-  function pintu(terbuka) {
-    sudutPintuTarget = terbuka ? -1.5 : 0;
+  function pintu(terbuka, p = pintuKeluar) {
+    p.target = terbuka ? p.buka : 0;
   }
 
   function serverAktif(aktif) {
@@ -1106,31 +1427,7 @@ export function buatKantor3D(wadah) {
       lampuServer.intensity = 0;
       gambarLayar();
     }
-  }
-
-  /** Kertas tugas melayang dari tangan `dari` ke tangan `ke`. */
-  function serahKertas(dari, ke) {
-    const kertas = kotak(-5, -6, -0.4, 5, 6, 0.4, '#ffffff');
-    const tangan = (k) => new THREE.Vector3(k.pos.x + Math.sin(k.arah) * 10, 28, k.pos.z + Math.cos(k.arah) * 10);
-    const a = tangan(dari), b = tangan(ke);
-    const puncak = a.clone().lerp(b, 0.5).setY(Math.max(a.y, b.y) + 24);
-    let t = 0;
-    return new Promise((selesai) => {
-      animasi.add((dt) => {
-        t = Math.min(1, t + dt / 0.6);
-        const u = 1 - t;
-        kertas.position.set(
-          u * u * a.x + 2 * u * t * puncak.x + t * t * b.x,
-          u * u * a.y + 2 * u * t * puncak.y + t * t * b.y,
-          u * u * a.z + 2 * u * t * puncak.z + t * t * b.z,
-        );
-        kertas.rotation.z = Math.sin(t * Math.PI * 2) * 0.4;
-        if (t < 1) return true;
-        adegan.remove(kertas);
-        selesai();
-        return false;
-      });
-    });
+    gambarTerminal();
   }
 
   // -------------------------------------------------------------------
@@ -1311,8 +1608,53 @@ export function buatKantor3D(wadah) {
     qa.setEkspresi('normal');
   }
 
+  // Developer: kerja di mejanya (mengetik paling sering), sesekali berpikir atau meregangkan bahu
+  async function idleDevKetik() {
+    if (idleBatal) return;
+    developer.aktivitas = 'ketik';
+    await tungguIdle(3000 + Math.random() * 3000);
+    if (developer.aktivitas === 'ketik') developer.aktivitas = null;
+  }
+
+  async function idleDevPikir() {
+    if (idleBatal) return;
+    developer.aktivitas = 'pikir';
+    developer.ikon('pikir');
+    await tungguIdle(2500);
+    developer.ikon(null);
+    if (developer.aktivitas === 'pikir') developer.aktivitas = null;
+  }
+
+  async function idleDevRegang() {
+    if (idleBatal) return;
+    gerakSesaat(developer, 'regang', 1.8);
+    await tungguIdle(2000);
+  }
+
+  const OBROLAN_DEV = [['Build-nya aman?', 'Aman, semua hijau.'], ['Lagi ngoding apa?', 'Rapikan skrip pemeriksa.'], ['Kopi?', 'Nanti dulu, tanggung!']];
+  /** QA mampir ke meja Developer, mengobrol sebentar, lalu kembali ke pojoknya. */
+  async function idleQACekDev() {
+    if (idleBatal) return;
+    await jalan(qa, RUTE.qaKeServer);
+    if (idleBatal) return;
+    hadap(qa, developer);
+    developer.toleh = 0.5;
+    const [tanya, jawab] = acak(OBROLAN_DEV);
+    await ucap(qa, tanya, { tahan: 400 });
+    if (idleBatal) return;
+    await ucap(developer, jawab, { tahan: 400 });
+    developer.toleh = 0;
+    if (idleBatal) return;
+    await jalan(qa, RUTE.qaPulang);
+    if (!idleBatal) qa.arahTarget = 0;
+  }
+
   const AKSI_IDLE = [
     { berat: 5, fn: idleDiam },
+    { berat: 3, fn: idleDevKetik },
+    { berat: 1, fn: idleDevPikir },
+    { berat: 1, fn: idleDevRegang },
+    { berat: 1, fn: idleQACekDev },
     { berat: 2, fn: idleMinumKopi },
     { berat: 2, fn: idleQAKopi },
     { berat: 2, fn: idleMengobrol },
@@ -1334,9 +1676,12 @@ export function buatKantor3D(wadah) {
     if (Math.hypot(pemeriksa.pos.x - TEMPAT.meja.x, pemeriksa.pos.z - TEMPAT.meja.z) > 2) await jalan(pemeriksa, 'meja');
     if (idleBatal) { sedangIdle = false; return; }
     hadapMeja(pemeriksa);
-    if (Math.hypot(qa.pos.x - TEMPAT.pojokQA.x, qa.pos.z - TEMPAT.pojokQA.z) > 2) await jalan(qa, 'pojokQA');
+    if (Math.hypot(qa.pos.x - TEMPAT.pojokQA.x, qa.pos.z - TEMPAT.pojokQA.z) > 2) await jalan(qa, RUTE.qaPulang);
     if (idleBatal) { sedangIdle = false; return; }
     qa.arahTarget = 0;
+    if (Math.hypot(developer.pos.x - TEMPAT.mejaDev.x, developer.pos.z - TEMPAT.mejaDev.z) > 2) await jalan(developer, RUTE.devKeMeja);
+    if (idleBatal) { sedangIdle = false; return; }
+    duduk(developer);
     while (!idleBatal) {
       await pilihBerbobot(AKSI_IDLE.filter((a) => !a.syarat || a.syarat()))();
       if (idleBatal) break;
@@ -1348,8 +1693,9 @@ export function buatKantor3D(wadah) {
   function hentikanIdle() {
     idleBatal = true;
     if (idleWakeup) { idleWakeup(); idleWakeup = null; }
-    pemeriksa.aktivitas = qa.aktivitas = null;
-    for (const k of [pemeriksa, qa]) {
+    pemeriksa.aktivitas = qa.aktivitas = developer.aktivitas = null;
+    developer.toleh = 0;
+    for (const k of [pemeriksa, qa, developer]) {
       k.rute = [];
       if (k.selesai) { const s = k.selesai; k.selesai = null; s(); }
       k.ucapId = ++nomorUcap;
@@ -1360,6 +1706,116 @@ export function buatKantor3D(wadah) {
     }
   }
 
+  /** Tunggu sampai `syarat()` benar (diperiksa tiap 100 ms). */
+  async function sampai(syarat, batasMs = 15000) {
+    const akhir = Date.now() + batasMs;
+    while (!syarat() && Date.now() < akhir) await tunggu(100);
+  }
+  const acak = (daftar) => daftar[Math.floor(Math.random() * daftar.length)];
+
+  // -------------------------------------------------------------------
+  // Ruang tunggu — murid yang antre duduk di kursi tunggu (maksimal 4 terlihat; jumlah
+  // sebenarnya tampil di layar antrean). Gerak kecil mereka bergantian dengan jeda acak.
+  // -------------------------------------------------------------------
+  const muridTunggu = new Map();     // id kiriman → { id, nama, k, kursi, laptop }
+  let daftarAntrean = [];             // [{ id, nama }] dari guru.js, urut antrean
+  let dipanggil = null;               // { id, nama } yang sedang dipanggil / diperiksa
+  let jumlahMenunggu = 0;
+
+  /** Daftar murid yang menunggu (urut). Murid baru masuk lewat koridor, yang hilang dari daftar pergi. */
+  function antrean(daftar) {
+    daftarAntrean = daftar.map(({ id, nama }) => ({ id, nama }));
+    const menunggu = daftarAntrean.filter((d) => d.id !== dipanggil?.id);
+    jumlahMenunggu = menunggu.length;
+    const tampilKursi = new Set(menunggu.slice(0, KURSI_TUNGGU.length).map((d) => d.id));
+    for (const [id, m] of muridTunggu) if (!tampilKursi.has(id)) { muridTunggu.delete(id); muridPergi(m); }
+    for (const d of menunggu.slice(0, KURSI_TUNGGU.length)) {
+      if (muridTunggu.has(d.id)) continue;
+      const kursi = KURSI_TUNGGU.findIndex((_, i) => ![...muridTunggu.values()].some((m) => m.kursi === i));
+      if (kursi < 0) break;
+      muridDatangTunggu(d, kursi);
+    }
+    gambarAntrean();
+  }
+
+  async function muridDatangTunggu(d, kursi) {
+    const k = buatMurid(d.nama, TEMPAT.koridor, Math.PI / 2);
+    // kursi tunggu berdempetan: cukup nama depan, label berselang-seling tinggi supaya tidak bertumpuk
+    k.setNama(namaDepan(d.nama));
+    k.labelNaik = kursi % 2 ? 9 : 0;
+    const m = { ...d, k, kursi, laptop: buatBenda('laptop') };
+    m.laptop.m.visible = false;
+    muridTunggu.set(d.id, m);
+    const K = KURSI_TUNGGU[kursi];
+    await jalan(k, ['masukTunggu', { x: K.x, z: 120 }, K]);
+    if (muridTunggu.get(d.id) !== m) return;
+    k.arahTarget = 0;
+    k.duduk = true;
+    hidupTunggu(m);
+  }
+
+  async function muridPergi(m) {
+    m.pergi = true;
+    buangBenda(m.laptop);
+    const K = KURSI_TUNGGU[m.kursi];
+    m.k.aktivitas = null;
+    m.k.toleh = 0;
+    await jalan(m.k, [{ x: K.x, z: 120 }, 'masukTunggu', 'koridor']);
+    m.k.hapus();
+  }
+
+  /** Arah menoleh (−1..1) dari kursi ke layar antrean di dinding belakang. */
+  const tolehKeLayar = (m) => (KURSI_TUNGGU[m.kursi].x < -100 ? 1 : -1);
+  const masihMenunggu = (m) => muridTunggu.get(m.id) === m && !m.dipanggil && !m.pergi;
+
+  const OBROLAN_TUNGGU = [['Sudah dicek?', 'Belum, nunggu nih.'], ['Punyamu jalan?', 'Semoga, hehe.'], ['Deg-degan ya.', 'Iya, sama!']];
+  /** Gerak kecil murid yang duduk menunggu, sampai ia dipanggil atau pergi. */
+  async function hidupTunggu(m) {
+    const k = m.k;
+    while (masihMenunggu(m)) {
+      await tunggu(4000 + Math.random() * 6000);
+      if (!masihMenunggu(m)) break;
+      const pilihan = acak(['ketik', 'ketik', 'baca', 'layar', 'kaki', 'ngobrol']);
+      if (pilihan === 'ketik') {
+        pegang(m.laptop, k, { maju: 9, tinggi: 26 });
+        m.laptop.m.visible = true;
+        k.aktivitas = 'ketik';
+        await tunggu(2500 + Math.random() * 2500);
+        k.aktivitas = null;
+        m.laptop.m.visible = false;
+      } else if (pilihan === 'baca') {
+        k.aktivitas = 'baca';
+        k.ikon('kertas');
+        await tunggu(2500);
+        k.aktivitas = null;
+        k.ikon(null);
+      } else if (pilihan === 'layar') {
+        k.toleh = tolehKeLayar(m);
+        await tunggu(1600);
+        k.toleh = 0;
+      } else if (pilihan === 'kaki') {
+        k.goyangKaki = true;
+        await tunggu(2200);
+        k.goyangKaki = false;
+      } else {
+        // dua murid bersebelahan saling menoleh, bertukar kalimat pendek, lalu mengangguk
+        const teman = [...muridTunggu.values()].find((t) => Math.abs(t.kursi - m.kursi) === 1 && masihMenunggu(t) && !t.k.aktivitas && !t.k.rute.length);
+        if (!teman) continue;
+        const kiri = KURSI_TUNGGU[teman.kursi].x > KURSI_TUNGGU[m.kursi].x ? 1 : -1;
+        const [tanya, jawab] = acak(OBROLAN_TUNGGU);
+        k.toleh = kiri; teman.k.toleh = -kiri;
+        await ucap(k, tanya, { tahan: 400 });
+        if (masihMenunggu(teman)) await ucap(teman.k, jawab, { tahan: 400 });
+        gerakSesaat(k, 'angguk', 1.0);
+        if (masihMenunggu(teman)) gerakSesaat(teman.k, 'angguk', 1.0);
+        await tunggu(1000);
+        k.toleh = 0;
+        if (masihMenunggu(teman)) teman.k.toleh = 0;
+      }
+    }
+    if (!m.dipanggil) m.k.aktivitas = null;
+  }
+
   // -------------------------------------------------------------------
   // Adegan
   // -------------------------------------------------------------------
@@ -1368,138 +1824,292 @@ export function buatKantor3D(wadah) {
     return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
   };
 
-  /** Siswa datang: mengetuk pintu, pemeriksa membukakan, masuk, menyerahkan tugas. */
-  async function datang(nama) {
+  let mapProyek = null, kartuKode = null, catatan = null;
+  let janjiPulang = null;
+  let lirikServer = null;
+
+  /**
+   * Murid dipanggil: menoleh ke layar, mengambil map, berdiri, berjalan ke pintu masuk, mengetuk;
+   * Pemeriksa membukakan dan memberi jalan; murid masuk, duduk di kursi tamu, meletakkan map.
+   * Murid berikutnya baru dipanggil setelah murid sebelumnya keluar (pintu & kursi tamu kosong).
+   */
+  async function datang(nama, id) {
+    await janjiPulang;
     hentikanIdle();
     await tunggu(80);
 
     if (siswa) siswa.hapus();
+    for (const b of [mapProyek, kartuKode, catatan]) buangBenda(b);
+    mapProyek = kartuKode = catatan = null;
     qa.ikon(null);
     qa.gelembung.replaceChildren();
     qa.setEkspresi('normal');
     jalan(qa, 'pojokQA').then(() => { qa.arahTarget = 0; });
+    duduk(developer);
 
-    const tampil = penampilan(nama);
-    siswa = buatKarakter({ nama, baju: '#f4f4f4', celana: '#6b6f78', rambut: tampil.rambut, H: tampil.H, S: tampil.S, mulai: TEMPAT.luar, warnaLabel: '#c26a12', arah: -Math.PI / 2 });
-    siswa.ikon('kertas');
-    // model 3D siswa (Quaternius) menggantikan voxel begitu siap; gagal → tetap voxel
-    pasangSiswa3D(siswa, nama).catch((err) => console.warn('Model siswa gagal dipasang, memakai voxel:', err));
+    dipanggil = { id, nama };
+    let m = id !== undefined ? muridTunggu.get(id) : null;
+    if (m) { muridTunggu.delete(id); m.dipanggil = true; m.k.setNama(nama); m.k.labelNaik = 0; }
+    antrean(daftarAntrean);          // kursi yang kosong boleh diisi murid berikutnya
+    fokus('panggil');
+    const k = siswa = m?.k ?? buatMurid(nama, TEMPAT.koridor, Math.PI / 2);
+    mapProyek = buatBenda('map');
 
-    // 1. Siswa berjalan ke depan pintu (pintu masih tertutup)
-    await jalan(siswa, 'pintu');
+    // 1. Nomor muncul → murid menoleh ke layar, menutup laptop, mengambil map, berdiri
+    if (m) {
+      k.aktivitas = null;
+      k.goyangKaki = false;
+      k.toleh = tolehKeLayar(m);
+      emoteBubble(k, '❗');
+      await tunggu(900);
+      k.toleh = 0;
+      buangBenda(m.laptop);
+      pegang(mapProyek, k);
+      await tunggu(450);
+      k.duduk = false;
+      await tunggu(550);
+      await jalan(k, ruteKePintuMasuk(KURSI_TUNGGU[m.kursi]));
+    } else {
+      // murid yang belum duduk (mis. kiriman ulang yang baru masuk) langsung dari koridor
+      pegang(mapProyek, k);
+      await jalan(k, ['masukTunggu', 'lorongTunggu', 'depanPintuMasuk']);
+    }
 
-    // 2. Siswa mengetuk pintu
-    gerakSesaat(siswa, 'ketuk', 1.2);
-    efekKetuk();
+    // 2. Mengetuk pintu masuk
+    k.arahTarget = Math.PI / 2;
+    gerakSesaat(k, 'ketuk', 1.2);
+    efekKetuk(pintuMasuk);
     await tunggu(200);
-    await ucap(siswa, 'Tok tok! Permisi, Pak.', { tahan: 600 });
+    await ucap(k, 'Tok tok! Permisi, Pak.', { tahan: 500 });
 
-    // 3. Pemeriksa bereaksi: kaget, menoleh ke pintu
+    // 3. Pemeriksa menoleh ke pintu, lalu bangkit dan membukakan
+    pemeriksa.aktivitas = null;
     pemeriksa.ikon('seru');
-    pemeriksa.setEkspresi('kaget');
-    hadap(pemeriksa, siswa);
-    await tunggu(500);
+    pemeriksa.arahTarget = panggung(Math.atan2(0 - pemeriksa.pos.x, 172 - pemeriksa.pos.z));
+    await tunggu(600);
     pemeriksa.ikon(null);
-    pemeriksa.setEkspresi('normal');
+    await ucap(pemeriksa, 'Iya, silakan!', { tahan: 300 });
+    await jalan(pemeriksa, [{ x: 150, z: 182 }, 'sambutPintuMasuk']);
+    pemeriksa.arahTarget = -Math.PI / 2;
+    pintu(true, pintuMasuk);
+    await tunggu(500);
+    // bergeser memberi jalan
+    await jalan(pemeriksa, { x: 46, z: 236 });
+    pemeriksa.arahTarget = panggung(-2.2);
 
-    // 4. Pemeriksa berjalan ke pintu
-    await ucap(pemeriksa, 'Iya, sebentar!', { tahan: 400 });
-    await jalan(pemeriksa, 'sambutPintu');
+    // 4. Murid mengangguk, masuk; pintu menutup setelah ia lewat
+    gerakSesaat(k, 'angguk', 1.0);
+    await tunggu(700);
+    const masuk = jalan(k, RUTE.keKursiTamu);
+    await sampai(() => k.pos.x > 50);
+    pintu(false, pintuMasuk);
+    const kembali = jalan(pemeriksa, [{ x: 170, z: 210 }, { x: 236, z: 168 }, 'meja']);
+    await masuk;
 
-    // 5. Pemeriksa membuka pintu
-    hadap(pemeriksa, siswa);
-    pintu(true);
-    await tunggu(400);
-
-    // 6. Siswa masuk, pemeriksa kembali ke meja (bersamaan)
-    const siswaJalan = jalan(siswa, 'depanMeja');
-    await tunggu(300);
-    const pemeriksaJalan = jalan(pemeriksa, 'meja');
-    await tunggu(900);
-    pintu(false);
-    await siswaJalan;
-    await pemeriksaJalan;
-
-    // 7. Saling menghadap & menyapa
-    hadap(siswa, pemeriksa);
-    hadap(pemeriksa, siswa);
+    // 5. Duduk di kursi tamu, meletakkan map di meja
+    k.arahTarget = 0.9;
+    k.duduk = true;
+    await tunggu(500);
+    gerakSesaat(k, 'serah', 0.8);
+    await terbangkan(mapProyek, 186, 31, 98, { miring: -Math.PI / 2 });
+    await kembali;
+    hadap(pemeriksa, k);
     await tunggu(150);
-    await ucap(siswa, 'Ini tugas saya, Pak.', { tahan: 800 });
-    await ucap(pemeriksa, `Baik, ${namaDepan(nama)}. Bapak periksa dulu, ya.`, { tahan: 700, ekspresiAkhir: 'senyum' });
-
-    // 8. Kertas berpindah tangan
-    siswa.ikon(null);
-    gerakSesaat(siswa, 'serah', 1.0);
-    await serahKertas(siswa, pemeriksa);
-    pemeriksa.ikon('kertas');
-    siswa.setEkspresi('normal');
+    await ucap(k, 'Ini proyek saya, Pak.', { tahan: 600 });
+    await ucap(pemeriksa, `Baik, ${namaDepan(nama)}. Kita periksa, ya.`, { tahan: 500, ekspresiAkhir: 'senyum' });
   }
 
+  /** Pemeriksa membuka map dan memanggil Developer; Developer membawa kartu kode ke terminal. */
   async function periksa() {
     pemeriksa.setEkspresi('normal');
-    const ke = jalan(pemeriksa, 'server');
-    siswa?.ikon('keringat');
-    if (siswa) emoteBubble(siswa, '😰');
-    await ke;
-    hadapMeja(pemeriksa);     // menghadap rak server
-    pemeriksa.ikon('pikir');
+    hadapMeja(pemeriksa);
+    pemeriksa.aktivitas = 'baca';
+    pemeriksa.ikon('kertas');
+    await tunggu(900);
+    pemeriksa.ikon(null);
+    pemeriksa.aktivitas = null;
+    pemeriksa.arahTarget = panggung(Math.atan2(developer.pos.x - pemeriksa.pos.x, developer.pos.z - pemeriksa.pos.z));
+    const panggilDev = ucap(pemeriksa, 'Dev, tolong jalankan ini, ya!', { tahan: 300 });
+    await tunggu(500);
+    developer.aktivitas = null;
+    developer.toleh = 0;
+    await ucap(developer, 'Siap!', { tahan: 200 });
+    await jalan(developer, RUTE.devKePemeriksa);
+    await panggilDev;
+
+    // Kartu kode diambil dari map
+    developer.arahTarget = panggung(Math.atan2(186 - developer.pos.x, 98 - developer.pos.z));
+    gerakSesaat(developer, 'serah', 0.8);
+    kartuKode = buatBenda('kartu');
+    kartuKode.m.position.set(186, 32, 98);
+    await serahkan(kartuKode, developer);
+    hadapMeja(pemeriksa);
+    pemeriksa.aktivitas = 'ketik';          // Pemeriksa memantau monitornya
+    if (siswa) emoteBubble(siswa, '🤞');
+
+    // Ke terminal, kartu dimasukkan, layar menyala, Developer mengetik
+    fokus('server');
+    await jalan(developer, RUTE.devKeTerminal);
+    hadapMeja(developer);
+    gerakSesaat(developer, 'ketuk', 0.8);
+    await terbangkan(kartuKode, 380, 33, 43, { detik: 0.4 });
+    kartuKode.m.visible = false;
+    teksTerminal = '';
     serverAktif(true);
-    pemeriksa.aktivitas = 'pikir';
-    gelembungTetap(pemeriksa, 'Menjalankan aplikasi…');
+    developer.aktivitas = 'ketik';
+    gelembungTetap(developer, 'Menjalankan aplikasi…');
+    // sesekali melirik lampu server (di kanannya)
+    const id = Symbol('lirik');
+    lirikServer = id;
+    (async () => {
+      while (lirikServer === id) {
+        await tunggu(2200 + Math.random() * 1500);
+        if (lirikServer !== id) break;
+        developer.toleh = -0.8;
+        await tunggu(900);
+        if (lirikServer === id) developer.toleh = 0;
+      }
+    })();
   }
 
   function kabar(teks) {
-    gelembungTetap(pemeriksa, teks.length > 52 ? teks.slice(0, 51) + '…' : teks);
+    gelembungTetap(developer, teks.length > 52 ? teks.slice(0, 51) + '…' : teks);
   }
 
+  /**
+   * Hasil pemeriksaan → adegan. `h`: { lulus, bebas, skor, bug, saran, terhenti }.
+   * `terhenti`: 'waktu' (waktu habis) atau 'error' (pemeriksa gagal menjalankan kode).
+   */
   async function hasil(h) {
+    lirikServer = null;
+    developer.toleh = 0;
+    developer.aktivitas = null;
+    developer.gelembung.replaceChildren();
     pemeriksa.aktivitas = null;
-    serverAktif(false);
     pemeriksa.ikon(null);
-    pemeriksa.gelembung.replaceChildren();
     siswa?.ikon(null);
-    if (h.lulus) {
+    const k = siswa;
+
+    if (h.terhenti) {
+      // Developer berhenti mengetik, melihat terminal, memberi tanda kepada Pemeriksa
+      teksTerminal = h.terhenti === 'waktu' ? 'WAKTU HABIS' : 'ERROR';
+      serverAktif(false);
+      developer.setEkspresi('kaget');
+      await tunggu(800);
+      developer.setEkspresi('normal');
+      developer.arahTarget = panggung(Math.atan2(pemeriksa.pos.x - developer.pos.x, pemeriksa.pos.z - developer.pos.z));
+      gerakSesaat(developer, 'angkat', 1.6);
+      emoteBubble(developer, h.terhenti === 'waktu' ? '⏱️' : '⚠️');
+      await ucap(developer, h.terhenti === 'waktu' ? 'Prosesnya berhenti, waktunya habis.' : 'Programnya tidak bisa dijalankan.', { tahan: 400 });
+      if (k) hadap(pemeriksa, k);
+      await ucap(pemeriksa, h.terhenti === 'waktu'
+        ? 'Programnya berjalan terlalu lama. Cek perulangannya, ya.'
+        : 'Programnya belum bisa berjalan. Lihat laporannya, ya.', { tahan: 500 });
+      if (k) {
+        gerakSesaat(k, 'angguk', 1.0);
+        await ucap(k, 'Baik, Pak. Saya cek lagi.', { tahan: 500 });
+      }
+      ikonSementara(pemeriksa, 'seru');
+    } else if (h.lulus) {
+      serverAktif(false);
+      teksTerminal = 'OK';
+      gambarTerminal();
+      // Developer menoleh dan mengacungkan jempol; Pemeriksa mengangguk lalu memuji
+      developer.arahTarget = 0;
+      developer.setEkspresi('senyum');
+      gerakSesaat(developer, 'jempol', 1.8);
+      emoteBubble(developer, '👍');
+      await ucap(developer, 'Aman, semuanya jalan!', { tahan: 300, ekspresiAkhir: 'senyum' });
+      if (k) hadap(pemeriksa, k);
       pemeriksa.setEkspresi('senyum');
-      await jalan(pemeriksa, 'meja');
-      if (siswa) hadap(pemeriksa, siswa);
       const kalimat = h.bebas
         ? `Bagus! Tidak ada bug.${typeof h.skor === 'number' ? ` Skornya ${h.skor}.` : ''}`
         : 'Bagus! Semua pemeriksaan lulus.';
-      gerakPenuh(pemeriksa, 'angguk');          // mengangguk sambil memuji
-      await ucap(pemeriksa, kalimat, { tahan: 500, ekspresiAkhir: 'senyum' });
-      if (siswa) {
-        siswa.setEkspresi('senyum');
-        siswa.lompat = 1.0;
-        if (punya(pemeriksa, 'tepuk')) gerakSesaat(pemeriksa, 'tepuk', 2.5);   // bertepuk tangan untuk siswa
-        konfeti(siswa.pos.x, siswa.pos.z);
-        efekLulus(siswa, h.skor);
-        emoteBubble(siswa, '🎉');
-        await ucap(siswa, 'Yeay! Terima kasih, Pak!', { tahan: 700, ekspresiAkhir: 'senyum' });
+      gerakPenuh(pemeriksa, 'angguk');
+      await ucap(pemeriksa, kalimat, { tahan: 400, ekspresiAkhir: 'senyum' });
+      if (k) {
+        k.duduk = false;
+        await tunggu(450);
+        k.setEkspresi('senyum');
+        k.lompat = 1.0;
+        if (punya(pemeriksa, 'tepuk')) gerakSesaat(pemeriksa, 'tepuk', 2.5);
+        konfeti(k.pos.x, k.pos.z);
+        efekLulus(k, h.skor);
+        emoteBubble(k, '🎉');
+        await ucap(k, 'Yeay! Terima kasih, Pak!', { tahan: 500, ekspresiAkhir: 'senyum' });
       }
-      ikonSementara(pemeriksa, 'centang');
+      if (h.saran) {
+        // Laporan berisi saran: Pemeriksa membaca catatan lalu menunjuk sambil menjelaskan
+        pemeriksa.ikon('kertas');
+        await tunggu(700);
+        pemeriksa.ikon(null);
+        gerakSesaat(pemeriksa, 'tunjuk', 2.2);
+        await ucap(pemeriksa, 'Ada beberapa saran di laporan. Coba dibaca, ya.', { tahan: 400 });
+        if (k) gerakSesaat(k, 'angguk', 1.0);
+      }
+      await tempelCatatan();
     } else {
-      pemeriksa.setEkspresi('kaget');
+      serverAktif(false);
+      teksTerminal = 'PERLU DIBENAHI';
+      gambarTerminal();
+      // Developer memanggil QA; QA mengecek terminal lalu menunjukkan temuannya kepada murid
       const jumlah = h.bug ?? 0;
-      await jalan(qa, 'sampingServer');
-      qa.arahTarget = Math.atan2(TEMPAT.server.x - qa.pos.x, 30 - qa.pos.z);
+      developer.arahTarget = panggung(Math.atan2(qa.pos.x - developer.pos.x, qa.pos.z - developer.pos.z));
+      gerakSesaat(developer, 'angkat', 1.6);
+      await ucap(developer, 'QA, bisa bantu cek ini?', { tahan: 200 });
+      await jalan(qa, RUTE.qaKeServer);
+      qa.arahTarget = panggung(Math.atan2(380 - qa.pos.x, 35 - qa.pos.z));
       qa.ikon('kaca');
       gerakSesaat(qa, 'periksa', 1.6);
-      await ucap(qa, jumlah ? `Ketemu ${jumlah} bug!` : 'Ada yang belum lulus!', { tahan: 400 });
-      pemeriksa.setEkspresi('normal');
-      await jalan(pemeriksa, 'meja');
-      if (siswa) hadap(pemeriksa, siswa);
-      gerakPenuh(pemeriksa, 'geleng');          // menggeleng: masih ada bug
-      await ucap(pemeriksa, jumlah
-        ? `Masih ada ${jumlah} bug. Lihat laporannya, ya.`
-        : 'Belum lulus. Lihat laporannya, ya.', { tahan: 500 });
-      if (siswa) {
-        siswa.setEkspresi('sedih');
-        emoteBubble(siswa, '😥');
-        await ucap(siswa, 'Baik, Pak. Saya perbaiki dulu.', { tahan: 600, ekspresiAkhir: 'sedih' });
+      await ucap(qa, jumlah ? `Ketemu ${jumlah} hal yang perlu dibenahi.` : 'Ada bagian yang belum jalan.', { tahan: 300 });
+      qa.ikon(null);
+      catatan = buatBenda('catatan');
+      pegang(catatan, qa);
+      await jalan(qa, RUTE.qaKeMurid);
+      if (k) {
+        hadap(qa, k);
+        k.toleh = 0.6;                      // murid menoleh ke QA di sampingnya
+        gerakSesaat(qa, 'tunjuk', 2.4);
+        await ucap(qa, 'Bagian ini yang perlu diperbaiki. Pasti bisa!', { tahan: 400, ekspresiAkhir: 'senyum' });
+        await serahkan(catatan, k, { tinggi: 30, maju: 9 });
+        gerakSesaat(k, 'angguk', 1.2);
+        await ucap(k, 'Oke, saya perbaiki dulu!', { tahan: 400, ekspresiAkhir: 'senyum' });
+        k.toleh = 0;
+        hadap(pemeriksa, k);
       }
-      ikonSementara(pemeriksa, 'seru');
+      gerakPenuh(pemeriksa, 'setuju');
+      await ucap(pemeriksa, 'Semangat! Kirim lagi kalau sudah, ya.', { tahan: 400, ekspresiAkhir: 'senyum' });
+      jalan(qa, RUTE.qaPulang).then(() => { if (!sedangDiperiksa()) qa.arahTarget = 0; });
     }
-    pulang();
+
+    // Developer kembali ke mejanya (tidak ditunggu)
+    developer.setEkspresi('normal');
+    jalan(developer, RUTE.devKeMeja).then(() => duduk(developer));
+    janjiPulang = pulang();
+  }
+
+  const sedangDiperiksa = () => dipanggil !== null;
+  function duduk(k) {
+    if (k === developer && Math.hypot(k.pos.x - TEMPAT.mejaDev.x, k.pos.z - TEMPAT.mejaDev.z) < 2) {
+      hadapMeja(k);
+      k.duduk = true;
+    }
+  }
+
+  /** Catatan nama murid yang lulus melayang dari tangan Pemeriksa ke papan, lalu "menempel". */
+  async function tempelCatatan() {
+    const c = buatBenda('catatan');
+    c.m.position.set(...tangan(pemeriksa));
+    const x = 30 + Math.random() * 120, y = 30 + Math.random() * 55;
+    await terbangkan(c, x, y, 4, { detik: 0.9 });
+    let t = 0;
+    animasi.add((dt) => {
+      t += dt;
+      c.m.scale.setScalar(1 + Math.sin(Math.min(1, t / 0.3) * Math.PI) * 0.4);
+      if (t < 1.4) return true;
+      buangBenda(c);           // papan digambar ulang oleh guru.js (papan()) setelah hasil tersimpan
+      return false;
+    });
   }
 
   function ikonSementara(k, nama, ms = 3500) {
@@ -1507,16 +2117,48 @@ export function buatKantor3D(wadah) {
     k.timerIkon = setTimeout(() => k.ikon(null), ms);
   }
 
+  /**
+   * Murid menerima map kembali, berdiri, mengangguk, lalu keluar lewat pintu kanan ke taman.
+   * Pemeriksa membalas, merapikan meja, dan kembali duduk.
+   */
   async function pulang() {
     const k = siswa;
     if (!k) return;
     await tunggu(300);
-    await jalan(k, 'pintu');
+    hadap(pemeriksa, k);
+    if (mapProyek) {
+      gerakSesaat(pemeriksa, 'serah', 0.8);
+      await serahkan(mapProyek, k);
+    }
+    if (k.duduk) {
+      k.duduk = false;
+      await tunggu(550);
+    }
+    hadap(k, pemeriksa);
+    gerakSesaat(k, 'angguk', 1.0);
+    await ucap(k, 'Terima kasih, Pak.', { tahan: 300 });
+    gerakPenuh(pemeriksa, 'angguk');
+    ucap(pemeriksa, 'Sama-sama!', { tahan: 600, ekspresiAkhir: 'senyum' });
+
+    const keluar = jalan(k, RUTE.keluar);
+    await tunggu(600);
+    hadapMeja(pemeriksa);
+    pemeriksa.aktivitas = 'ketik';         // merapikan meja, lalu duduk kembali
+    await sampai(() => k.pos.x > 410 || k.dihapus);
     pintu(true);
+    await keluar;
     await jalan(k, 'luar');
     pintu(false);
+    for (const b of [mapProyek, catatan, kartuKode]) buangBenda(b);
+    mapProyek = catatan = kartuKode = null;
     if (siswa === k) siswa = null;
     k.hapus();
+    dipanggil = null;
+    teksTerminal = '';
+    gambarTerminal();
+    gambarAntrean();
+    fokus('luas');
+    pemeriksa.aktivitas = null;
     mulaiIdle();
   }
 
@@ -1571,17 +2213,118 @@ export function buatKantor3D(wadah) {
     gambarLayar();
   }
 
+  // Monitor Developer: editor kode gelap; baris bertambah saat ia mengetik, kursor berkedip
+  const WARNA_KODE = ['#c678dd', '#61afef', '#98c379', '#e5c07b', '#abb2bf'];
+  function gambarLayarDev() {
+    const { ctx, tekstur } = layarDevKanvas;
+    ctx.fillStyle = '#1e222a';
+    ctx.fillRect(0, 0, 256, 136);
+    const baris = developer.aktivitas === 'ketik' ? 3 + Math.floor(waktu * 2) % 6 : 6;
+    for (let i = 0; i < baris; i++) {
+      const lekuk = [0, 1, 1, 2, 1, 0][i] * 16;
+      ctx.fillStyle = WARNA_KODE[i % WARNA_KODE.length];
+      ctx.fillRect(14 + lekuk, 14 + i * 18, 40 + ((i * 53) % 110), 9);
+    }
+    if (kedipKursorTerakhir) {
+      ctx.fillStyle = '#e8e8e8';
+      ctx.fillRect(14 + (baris < 6 ? 60 : 150), 14 + (baris - 1) * 18, 6, 11);
+    }
+    tekstur.needsUpdate = true;
+  }
+
+  // Terminal: log berjalan saat memeriksa, pesan akhir (OK / WAKTU HABIS / ERROR), atau kursor siaga
+  let teksTerminal = '';
+  const LOG_TERMINAL = ['$ python app.py', ' * Running', 'GET /  200', 'GET /profil', 'POST /tambah', '302 → /', 'cek template', 'test_client()'];
+  function gambarTerminal() {
+    const { ctx, tekstur } = terminalKanvas;
+    ctx.fillStyle = '#0f1a14';
+    ctx.fillRect(0, 0, 192, 128);
+    ctx.font = 'bold 15px monospace';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    if (serverSibuk) {
+      const mulai = Math.floor(waktu * 3);
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = i === 5 ? '#b8ffcf' : '#4be38a';
+        ctx.fillText(LOG_TERMINAL[(mulai + i) % LOG_TERMINAL.length], 8, 8 + i * 19);
+      }
+    } else if (teksTerminal) {
+      const ok = teksTerminal === 'OK';
+      ctx.fillStyle = ok ? '#4be38a' : '#ff6b6b';
+      ctx.font = 'bold 24px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const [i, b] of pecah(teksTerminal, 10).entries()) ctx.fillText(b, 96, 50 + i * 28);
+    } else if (kedipKursorTerakhir) {
+      ctx.fillStyle = '#4be38a';
+      ctx.fillText('>_', 8, 8);
+    }
+    tekstur.needsUpdate = true;
+  }
+
+  // Layar antrean di ruang tunggu: murid yang dipanggil, atau bergantian jumlah menunggu / pengingat
+  function gambarAntrean() {
+    const { ctx, tekstur } = antreanKanvas;
+    ctx.fillStyle = '#16324f';
+    ctx.fillRect(0, 0, 400, 192);
+    ctx.fillStyle = '#244a72';
+    ctx.fillRect(0, 0, 400, 44);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.fillText(dipanggil ? 'SILAKAN MASUK' : 'ANTREAN', 200, 23);
+    if (dipanggil) {
+      ctx.fillStyle = '#ffd166';
+      ctx.font = 'bold 40px sans-serif';
+      const n = dipanggil.nama;
+      ctx.fillText(n.length > 14 ? n.slice(0, 13) + '…' : n, 200, 100);
+      ctx.fillStyle = '#c8d8f0';
+      ctx.font = '22px sans-serif';
+      ctx.fillText(jumlahMenunggu ? `${jumlahMenunggu} lagi menunggu` : 'Antrean terakhir', 200, 158);
+    } else if (halamanAntreanTerakhir === 1) {
+      ctx.fillStyle = '#c8d8f0';
+      ctx.font = '28px sans-serif';
+      ctx.fillText('Siapkan proyekmu,', 200, 95);
+      ctx.fillText('tunggu dipanggil.', 200, 135);
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 72px sans-serif';
+      ctx.fillText(String(jumlahMenunggu), 200, 104);
+      ctx.fillStyle = '#c8d8f0';
+      ctx.font = '22px sans-serif';
+      ctx.fillText('menunggu', 200, 160);
+    }
+    tekstur.needsUpdate = true;
+  }
+
   function reset() {
     hentikanIdle();
     if (siswa) { siswa.hapus(); siswa = null; }
-    for (const k of [pemeriksa, qa]) { k.ikon(null); k.gelembung.replaceChildren(); k.setEkspresi('normal'); k.rute = []; }
+    for (const m of muridTunggu.values()) { buangBenda(m.laptop); m.k.hapus(); m.pergi = true; }
+    muridTunggu.clear();
+    for (const b of [...bendaDibawa]) buangBenda(b);
+    mapProyek = kartuKode = catatan = null;
+    dipanggil = null;
+    janjiPulang = null;
+    lirikServer = null;
+    jumlahMenunggu = 0;
+    for (const k of [pemeriksa, qa, developer]) { k.ikon(null); k.gelembung.replaceChildren(); k.setEkspresi('normal'); k.rute = []; k.toleh = 0; }
     pemeriksa.pos = { ...TEMPAT.meja };
     qa.pos = { ...TEMPAT.pojokQA };
+    developer.pos = { ...TEMPAT.mejaDev };
     pemeriksa.arah = pemeriksa.arahTarget = ARAH_MEJA;
+    developer.arah = developer.arahTarget = ARAH_MEJA;
+    developer.duduk = true;
     qa.arah = qa.arahTarget = 0;
+    teksTerminal = '';
     serverAktif(false);
     pintu(false);
+    pintu(false, pintuMasuk);
+    Object.assign(fokusKini, FOKUS.luas);
+    fokus('luas');
     layar('');
+    gambarAntrean();
     mulaiIdle();
   }
 
@@ -1591,7 +2334,10 @@ export function buatKantor3D(wadah) {
 
   papan([]);
   layar('');
+  gambarAntrean();
+  gambarTerminal();
+  gambarLayarDev();
   ukurUlang();
   mulaiIdle();
-  return { datang, periksa, kabar, hasil, papan, layar, reset, jeda, tampil, pemeriksa, qa };
+  return { datang, periksa, kabar, hasil, antrean, papan, layar, reset, jeda, tampil, pemeriksa, qa, developer };
 }
