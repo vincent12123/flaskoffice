@@ -47,6 +47,24 @@ Semua tiket ada di `public/js/level.js`: teks tugas untuk siswa, `kasus` (permin
 
 ## Deploy
 
-Belum dideploy. Rencana mengikuti pola goldenbee di VPS karyabangsa: `flaskoffice.service` di
-`127.0.0.1:3040`, subdomain lewat Cloudflare Tunnel, `.env` dengan `COOKIE_SECURE=true` dan
-`TRUST_PROXY=true`. **Backup `data/` sebelum update.**
+Produksi: **https://threejs.sukardi.cloud** di shared hosting Hostinger (`ssh -p 65002 u715621294@88.223.90.200`),
+dijalankan LiteSpeed lewat direktif Passenger di `public_html/.htaccess` (tanpa hPanel, tanpa systemd).
+
+| Apa | Di mana |
+|---|---|
+| Kode (clone repo ini) | `~/domains/threejs.sukardi.cloud/nodejs` |
+| `.env` | `nodejs/.env` — `NODE_ENV=production`, `DB_PATH`, `COOKIE_SECURE=true`, `TRUST_PROXY=true` (port diatur LiteSpeed) |
+| Database | `~/flaskoffice-data/flaskoffice.db` (di luar folder kode) |
+| Log | `nodejs/tmp/console.log` |
+| Node | `/opt/alt/alt-nodejs22/root/usr/bin/node` |
+
+Update (**backup `~/flaskoffice-data` dulu**):
+
+```bash
+export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
+cd ~/domains/threejs.sukardi.cloud/nodejs
+git pull && npm ci && npm run build && touch tmp/restart.txt
+```
+
+Akun guru: `node dist/cli/buat-guru.js <username> "<Nama>"` dari folder yang sama (password diminta lewat prompt).
+Migrasi database berjalan otomatis saat aplikasi start.
